@@ -293,6 +293,17 @@ export class EntryComponent implements OnDestroy {
     return warnings;
   }
 
+  private activeLaptopCount(assignedTo: string, excludedId?: number): number {
+    const employee = assignedTo.trim().toLowerCase();
+    if (!employee || ['stock', 'unassigned'].includes(employee)) return 0;
+    return this.data.assets().filter(asset =>
+      asset.id !== excludedId &&
+      asset.category.trim().toLowerCase() === 'laptop' &&
+      asset.assignedTo.trim().toLowerCase() === employee &&
+      asset.status.trim().toLowerCase() === 'in use'
+    ).length;
+  }
+
   /** Client-side validation for fast feedback; the server re-validates every field.
    *  Purchase/warranty dates are intentionally NOT collected here — they are managed
    *  separately in the Warranty & Predictive Forecasting module (via its import). */
@@ -302,6 +313,7 @@ export class EntryComponent implements OnDestroy {
     const serial = this.fSerial.trim().toLowerCase();
     if (this.data.assets().some(a => a.serial.toLowerCase() === serial)) return `An asset with serial "${this.fSerial.trim()}" already exists.`;
     if (this.fAssignedTo().trim() && !this.assignableEmployees().some(name => name.toLowerCase() === this.fAssignedTo().trim().toLowerCase())) return 'Select an employee from Manage Employees or choose Stock.';
+    if (this.fCategory().trim().toLowerCase() === 'laptop' && this.fStatus() === 'In Use' && this.activeLaptopCount(this.fAssignedTo()) >= 2) return `${this.fAssignedTo().trim()} already has two active laptops. Return or unassign a laptop before assigning another.`;
     return '';
   }
 
@@ -536,6 +548,9 @@ export class EntryComponent implements OnDestroy {
     if (!name) { this.modalError.set('Item name is required.'); return; }
     if (!serial) { this.modalError.set('Serial number is required.'); return; }
     if (this.eAssignedTo().trim() && !this.assignableEmployees().some(employee => employee.toLowerCase() === this.eAssignedTo().trim().toLowerCase())) { this.modalError.set('Select an employee from Manage Employees or choose Stock.'); return; }
+    if (this.eCategory().trim().toLowerCase() === 'laptop' && this.eStatus() === 'In Use' && this.activeLaptopCount(this.eAssignedTo(), this.eId) >= 2) {
+      this.modalError.set(`${this.eAssignedTo().trim()} already has two active laptops. Return or unassign a laptop before assigning another.`); return;
+    }
     if (this.ePurchaseDate && this.eWarrantyDate && this.eWarrantyDate < this.ePurchaseDate) { this.modalError.set('Warranty date cannot be earlier than the purchase date.'); return; }
     if (this.data.assets().some(a => a.id !== this.eId && a.serial.toLowerCase() === serial.toLowerCase())) {
       this.modalError.set(`Another asset already uses serial "${serial}".`); return;
