@@ -133,6 +133,18 @@ export class AssignModalComponent {
     const selectedEmployee = this.data.employeeRoster().find(employee => employee.name.toLowerCase() === assignedTo.toLowerCase());
     if (!checkingIn && !selectedEmployee) { this.error.set('Select an employee from Manage Employees before checking out an asset.'); return; }
     const status = checkingIn ? 'In Storage' : 'In Use';
+    if (!checkingIn && a.category.trim().toLowerCase() === 'laptop') {
+      const activeCount = this.data.assets().filter(item =>
+        item.id !== a.id &&
+        item.category.trim().toLowerCase() === 'laptop' &&
+        item.assignedTo.trim().toLowerCase() === assignedTo.toLowerCase() &&
+        item.status.trim().toLowerCase() === 'in use'
+      ).length;
+      if (activeCount >= 2) {
+        this.error.set(`${assignedTo} already has two active laptops. Return or unassign a laptop before assigning another.`);
+        return;
+      }
+    }
     this.saving.set(true);
     const res = await this.data.assignAsset(a.id, {
       assignedTo: selectedEmployee?.name || assignedTo,
