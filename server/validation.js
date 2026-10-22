@@ -3,7 +3,8 @@
  * Server-side validation + sanitization. This is the real trust boundary —
  * the client validates too for UX, but every write is re-checked here.
  */
-const { CATEGORIES, DEPARTMENTS, STATUSES, CONSUMABLE_CATEGORIES, CONSUMABLE_UNITS, STOCK_LABEL } = require('./db');
+const store = require('./db');
+const { DEPARTMENTS, STATUSES, STOCK_LABEL } = store;
 
 /** Strip control chars, collapse whitespace, cap length. Neutralizes stored-XSS
  *  payloads at the source (the Angular client also escapes on render). */
@@ -54,7 +55,7 @@ function validateAsset(input, { requireDates = true } = {}) {
 
   if (!name) return { ok: false, error: 'Item name is required.' };
   if (!serial) return { ok: false, error: 'Serial number is required.' };
-  if (!CATEGORIES.includes(category)) return { ok: false, error: `Invalid category "${category}".` };
+  if (!store.dropdownOptions.assetCategories.includes(category)) return { ok: false, error: `Invalid category "${category}".` };
   if (['stock', 'unassigned'].includes(department.toLowerCase())) department = STOCK_LABEL;
   if (department !== STOCK_LABEL && !DEPARTMENTS.includes(department)) return { ok: false, error: `Invalid department "${department}".` };
   if (!STATUSES.includes(status)) return { ok: false, error: `Invalid status "${status}".` };
@@ -96,8 +97,8 @@ function validateConsumable(input) {
   const reorderThreshold = Number(input.reorderThreshold);
 
   if (!name) return { ok: false, error: 'Item name is required.' };
-  if (!CONSUMABLE_CATEGORIES.includes(category)) return { ok: false, error: `Invalid category "${category}".` };
-  if (!CONSUMABLE_UNITS.includes(unit)) return { ok: false, error: `Invalid unit "${unit}".` };
+  if (!store.dropdownOptions.consumableCategories.includes(category)) return { ok: false, error: `Invalid category "${category}".` };
+  if (!store.dropdownOptions.consumableUnits.includes(unit)) return { ok: false, error: `Invalid unit "${unit}".` };
   if (input.quantity === null || input.quantity === undefined || String(input.quantity).trim() === '' || !Number.isInteger(quantity) || quantity < 0 || quantity > 1000000) return { ok: false, error: 'Quantity must be a whole number between 0 and 1,000,000.' };
   if (input.reorderThreshold === null || input.reorderThreshold === undefined || String(input.reorderThreshold).trim() === '' || !Number.isInteger(reorderThreshold) || reorderThreshold < 0 || reorderThreshold > 1000000) return { ok: false, error: 'Reorder threshold must be a whole number between 0 and 1,000,000.' };
 

@@ -1,7 +1,7 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { DataService, CATEGORIES, DEPARTMENTS, STATUSES } from '../../services/data.service';
+import { DataService, DEPARTMENTS, STATUSES } from '../../services/data.service';
 import { Asset } from '../../models/models';
 import { exportXlsx } from '../../services/util';
 
@@ -85,7 +85,7 @@ export class DataHealthComponent {
         description: 'Category, department or status is outside the known list — likely from an old import.',
         icon: 'fa-triangle-exclamation', tone: 'rose',
         assets: assets.filter(a =>
-          !CATEGORIES.includes(a.category) || !DEPARTMENTS.includes(a.department) || !STATUSES.includes(a.status)),
+          !this.data.categories().includes(a.category) || !DEPARTMENTS.includes(a.department) || !STATUSES.includes(a.status)),
         detail: (a) => `Category: ${a.category || '—'} · Dept: ${a.department || '—'} · Status: ${a.status || '—'}`
       }
     ];

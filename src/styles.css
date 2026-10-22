@@ -56,6 +56,38 @@ button, select, input, a, label, .cursor-pointer, .custom-select-trigger, .custo
 .sidebar-sort-editing { cursor: grab; border-radius: 0.9rem; }
 .sidebar-sort-editing:active { cursor: grabbing; }
 .sidebar-sort-editing:hover { outline: 1px dashed rgba(99, 102, 241, 0.5); }
+.nav-floating-tooltip {
+    transform: translateY(-50%);
+    padding: 0.42rem 0.72rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.58rem;
+    background: #f8fafc;
+    color: #1e293b;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), 0 2px 5px rgba(0, 0, 0, 0.18);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    animation: nav-tooltip-appear 120ms ease-out both;
+}
+.nav-floating-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -0.38rem;
+    width: 0.65rem;
+    height: 0.65rem;
+    transform: translateY(-50%) rotate(45deg);
+    border-left: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    border-bottom-left-radius: 0.1rem;
+    background: #f8fafc;
+}
+html.dark .nav-floating-tooltip { border-color: var(--af-border); background: var(--af-panel); color: var(--af-text); }
+html.dark .nav-floating-tooltip::before { border-color: var(--af-border); background: var(--af-panel); }
+@keyframes nav-tooltip-appear {
+    from { opacity: 0; translate: -3px 0; }
+    to { opacity: 1; translate: 0 0; }
+}
 .nav-drag-handle { width: 0.5rem; font-size: 0.7rem; opacity: 0.7; cursor: grab; }
 .sidebar-edit-toggle { padding: 0.35rem 0.45rem; font-size: 0.65rem; line-height: 1; }
 .sidebar-edit-label { font-size: 0.6rem; }
@@ -356,7 +388,7 @@ html.dark .assetflow-shell .glass-nav {
     -webkit-backdrop-filter: none !important;
 }
 html.dark .assetflow-shell aside {
-    width: 12rem;
+    width: 13rem;
     border-right: 1px solid var(--af-border) !important;
 }
 html.dark .assetflow-shell .sidebar-body { padding: 1rem; }
@@ -457,7 +489,7 @@ html.dark body ::-webkit-scrollbar-thumb { background: #555; }
 
 @media (max-width: 767px) {
     .assetflow-topbar { padding-inline: 14px; }
-    html.dark .assetflow-shell aside { width: 16rem; }
+    html.dark .assetflow-shell aside { width: 13rem; }
     html.dark .assetflow-shell .sidebar-brand { display: none; }
     html.dark .assetflow-shell header.glass-nav { padding-inline: 14px; }
     html.dark .assetflow-shell header h1 { font-size: 16px; }
@@ -466,7 +498,7 @@ html.dark body ::-webkit-scrollbar-thumb { background: #555; }
 /* Desktop sidebar collapse control and icon-only navigation state. */
 @media (min-width: 768px) {
     .assetflow-shell aside.glass-nav {
-        flex: 0 0 12rem;
+        flex: 0 0 13rem;
         will-change: flex-basis;
         transition: flex-basis .24s cubic-bezier(.22, .75, .25, 1);
     }
@@ -854,6 +886,23 @@ html:not(.dark) .assetflow-shell .custom-select-trigger {
         overscroll-behavior: contain;
     }
 }
+@media (max-width: 1023px) {
+    .dropdown-assets-grid {
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    .dropdown-assets-grid > aside,
+    .dropdown-assets-grid > article {
+        position: static !important;
+        inset: auto !important;
+        width: 100% !important;
+        min-width: 0;
+        height: auto !important;
+        margin: 0;
+    }
+}
 @media (min-width: 768px) {
     .assetflow-shell .sidebar-body > div:first-child { display: none; }
 }
@@ -870,7 +919,7 @@ html:not(.dark) body { font-family: 'Plus Jakarta Sans', sans-serif; }
 
 @media (min-width: 768px) {
     html.dark .assetflow-shell aside,
-    html:not(.dark) .assetflow-shell aside { width: 12rem !important; }
+    html:not(.dark) .assetflow-shell aside { width: 13rem !important; }
     html.dark .assetflow-shell .sidebar-body,
     html:not(.dark) .assetflow-shell .sidebar-body { padding: 1rem !important; }
     html.dark .assetflow-shell .sidebar-body > div:first-child,
@@ -879,7 +928,7 @@ html:not(.dark) body { font-family: 'Plus Jakarta Sans', sans-serif; }
 
 @media (max-width: 767px) {
     html.dark .assetflow-shell aside,
-    html:not(.dark) .assetflow-shell aside { width: 16rem !important; }
+    html:not(.dark) .assetflow-shell aside { width: 13rem !important; }
 }
 
 html.dark .assetflow-shell aside nav,
@@ -1291,6 +1340,8 @@ html:not(.dark) .assetflow-shell .custom-select-trigger {
 .assetflow-shell .glass-input,
 .assetflow-shell .custom-select-trigger,
 .glass-input { border-color: var(--af-border) !important; }
+.sign-in-date { color-scheme: light; accent-color: var(--af-blue); }
+html.dark .sign-in-date { color-scheme: dark; }
 html.dark .assetflow-shell .text-indigo-300,
 html.dark .assetflow-shell .text-indigo-400,
 html.dark .assetflow-shell .text-indigo-500,

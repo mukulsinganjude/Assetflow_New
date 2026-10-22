@@ -9,11 +9,6 @@ const { signToken, requireAuth, requireRole } = require('./auth');
 const { clean, cleanMultiline, validateAsset, isValidDate, validateConsumable } = require('./validation');
 
 const app = express();
-const allowedBrowserOrigins = new Set([
-  'https://assetflow-it.netlify.app',
-  'https://assetflowit.netlify.app',
-  ...(process.env.ASSETFLOW_CORS_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean)
-]);
 const isLocalDevelopmentOrigin = origin => {
   try {
     const url = new URL(origin);
@@ -24,7 +19,7 @@ const isLocalDevelopmentOrigin = origin => {
   } catch { return false; }
 };
 app.use(cors({ origin(origin, callback) {
-  if (!origin || allowedBrowserOrigins.has(origin) || isLocalDevelopmentOrigin(origin)) return callback(null, true);
+  if (!origin || isLocalDevelopmentOrigin(origin)) return callback(null, true);
   return callback(new Error('This website origin is not allowed to access the AssetFlow API.'));
 } }));
 app.use(express.json({ limit: '2mb' }));
@@ -34,7 +29,7 @@ app.use(express.json({ limit: '2mb' }));
 app.use((req, res, next) => { if (req.body == null) req.body = {}; next(); });
 
 // A route mutates the in-memory snapshot and calls persist(). Delay its JSON
-// response until the selected database snapshot was written.
+// response until the local database snapshot was written.
 app.use((req, res, next) => {
   const sendJson = res.json.bind(res);
   res.json = body => {
@@ -299,6 +294,7 @@ const PERMISSION_GROUPS = {
   links: ['view', 'add', 'delete', 'import', 'export'],
   deskSetup: ['view', 'add', 'edit', 'delete', 'import', 'export'],
   consumables: ['view', 'add', 'edit', 'delete', 'import', 'export', 'adjust'],
+  dropdowns: ['view', 'manage'],
   activity: ['view', 'export', 'clear'],
   users: ['manage'],
   backup: ['manage']
@@ -347,6 +343,8 @@ function permissionForRequest(req) {
   if (pathMatch(/^\/links\/import$/)) return 'links.import';
   if (pathMatch(/^\/links\/\d+$/)) return 'links.delete';
   if (path === '/logs') return method === 'GET' ? 'activity.view' : method === 'DELETE' ? 'activity.clear' : null;
+  if (path === '/sign-in-events') return 'users.manage';
+  if (path === '/dropdown-options') return method === 'GET' ? ['dropdowns.view', 'dropdowns.manage'] : method === 'PUT' ? 'dropdowns.manage' : null;
   if (path === '/users' || pathMatch(/^\/users\//)) return 'users.manage';
   if (path === '/backup' || path === '/restore') return 'backup.manage';
   return null;
@@ -1290,6 +1288,50 @@ app.delete('/api/users/:username', requireRole('admin'), (req, res) => {
 // All authenticated users can review the activity trail; only admins can clear it.
 app.get('/api/logs', (req, res) => res.json(store.db.logs));
 
+// Keep authentication events independently searchable even when routine audit
+// entries roll out of the shorter Activity Trail retention window.
+app.get('/api/sign-in-events', requireRole('admin'), (req, res) => {
+  const events = store.db.signInEvents || [];
+  const actors = new Set(events.map(event => String(event.user || '').toLowerCase()));
+  const profiles = store.db.users
+    .filter(user => actors.has(String(user.username || '').toLowerCase()) && user.profileImage)
+    .map(user => ({ username: user.username, email: user.email || '', displayName: user.displayName || '', profileImage: user.profileImage }));
+  res.json({ events, profiles });
+});
+
+app.get('/api/dropdown-options', (req, res) => res.json(store.dropdownOptions));
+app.put('/api/dropdown-options', (req, res) => {
+  const checked = store.validateDropdownOptions(req.body);
+  if (checked.error) return res.status(400).json({ error: checked.error });
+  const next = checked.value;
+  const current = store.dropdownOptions;
+  const removed = (before, after) => before.filter(item => !after.includes(item));
+  const removedCategories = removed(current.assetCategories, next.assetCategories);
+  const assets = [...(store.db.assets || []), ...(store.db.formerEmployees || []).flatMap(row => row.assets || [])];
+  for (const category of removedCategories) if (assets.some(row => row.category === category)) return res.status(409).json({ error: `Cannot remove ${category}; it is used by saved assets.` });
+  for (const category of current.assetCategories) {
+    const removedModels = removed(current.assetModels[category] || [], next.assetModels[category] || []);
+    for (const model of removedModels) {
+      if (assets.some(row => row.category === category && row.name === model) || (store.db.deskPeripherals || []).some(row => row.category === category && row.model === model) || (store.db.dellCases || []).some(row => row.category === category && row.assetModel === model)) return res.status(409).json({ error: `Cannot remove ${model}; it is used by a saved asset, desk setup, or Dell case.` });
+    }
+  }
+  for (const row of store.db.deskPeripherals || []) if (!next.deskCategories.includes(row.category) || !(next.assetModels[row.category] || []).includes(row.model)) return res.status(409).json({ error: `Cannot remove ${row.category} / ${row.model}; it is used by Desk Setup.` });
+  for (const row of store.db.dellCases || []) {
+    const category = row.category || current.assetCategories.find(item => (current.assetModels[item] || []).includes(row.assetModel)) || assets.find(asset => asset.name === row.assetModel)?.category;
+    if (category && (!next.assetCategories.includes(category) || !(next.assetModels[category] || []).includes(row.assetModel))) return res.status(409).json({ error: `Cannot remove ${category} / ${row.assetModel}; it is used by a Dell case.` });
+  }
+  const removedConsumableCategories = removed(current.consumableCategories, next.consumableCategories);
+  const removedUnits = removed(current.consumableUnits, next.consumableUnits);
+  for (const row of store.db.consumables || []) {
+    if (removedConsumableCategories.includes(row.category)) return res.status(409).json({ error: `Cannot remove ${row.category}; it is used by a saved consumable.` });
+    if (removedUnits.includes(row.unit)) return res.status(409).json({ error: `Cannot remove ${row.unit}; it is used by a saved consumable.` });
+  }
+  store.db.dropdownOptions = next;
+  store.addLog(req.user.username, 'Updated managed dropdown options');
+  store.persist();
+  res.json(next);
+});
+
 app.delete('/api/logs', requireRole('admin'), (req, res) => {
   store.db.logs = [];
   store.persist();
@@ -1388,8 +1430,8 @@ function validateDeskPeripheral(body, existingId = null) {
     serial: clean(body.serial, 100)
   };
   if (!record.deskNo || !record.category || !record.model || !record.serial) return { error: 'Desk number, category, item model/name, and serial number are required.' };
-  if (!DESK_CATEGORIES.includes(record.category)) return { error: 'Category must be Monitor or Docking Station.' };
-  const models = store.CATALOG[record.category] || [];
+  if (!store.dropdownOptions.deskCategories.includes(record.category)) return { error: 'Category must be Monitor or Docking Station.' };
+  const models = store.dropdownOptions.assetModels[record.category] || [];
   if (!models.includes(record.model)) return { error: 'Select a valid item model/name for the chosen category.' };
   const otherRows = (store.db.deskPeripherals || []).filter(row => row.id !== existingId);
   if (otherRows.some(row => String(row.serial || '').toLowerCase() === record.serial.toLowerCase())) return { error: 'That serial number is already used on another desk item.' };
@@ -1504,10 +1546,10 @@ function validateDellCase(body) {
       ...(store.db.assets || []),
       ...(store.db.formerEmployees || []).flatMap(employee => Array.isArray(employee.assets) ? employee.assets : [])
     ];
-    value.category = store.CATEGORIES.find(category => (store.CATALOG[category] || []).includes(value.assetModel)) ||
+    value.category = store.dropdownOptions.assetCategories.find(category => (store.dropdownOptions.assetModels[category] || []).includes(value.assetModel)) ||
       trackedAssets.find(asset => String(asset.name || '').toLowerCase() === value.assetModel.toLowerCase())?.category || '';
   }
-  if (!store.CATEGORIES.includes(value.category)) return { error: 'Choose a valid asset category.' };
+  if (!store.dropdownOptions.assetCategories.includes(value.category)) return { error: 'Choose a valid asset category.' };
   const employeeName = isStock(value.employeeName) ? STOCK :
     (store.db.employees || []).find(employee => employee.name.toLowerCase() === value.employeeName.toLowerCase())?.name ||
     (store.db.formerEmployees || []).find(employee => employee.name.toLowerCase() === value.employeeName.toLowerCase())?.name;
@@ -1518,7 +1560,7 @@ function validateDellCase(body) {
     ...(store.db.formerEmployees || []).flatMap(employee => Array.isArray(employee.assets) ? employee.assets : [])
   ];
   const trackedSerial = trackedAssets.find(asset => String(asset.serial || '').trim().toLowerCase() === value.assetSerial.toLowerCase());
-  const knownModel = (store.CATALOG[value.category] || []).includes(value.assetModel) ||
+  const knownModel = (store.dropdownOptions.assetModels[value.category] || []).includes(value.assetModel) ||
     trackedAssets.some(asset => asset.category === value.category && asset.name.toLowerCase() === value.assetModel.toLowerCase());
   if (!knownModel) return { error: 'Choose a model that belongs to the selected category.' };
   if (trackedSerial && (trackedSerial.category !== value.category || trackedSerial.name.toLowerCase() !== value.assetModel.toLowerCase())) {
@@ -1709,7 +1751,9 @@ app.get('/api/backup', requireRole('admin'), (req, res) => {
     quickLinks: store.db.quickLinks || [],
     employees: store.db.employees || [],
     deletedRecords: store.db.deletedRecords || [],
-    logs: store.db.logs
+    logs: store.db.logs,
+    signInEvents: store.db.signInEvents || [],
+    dropdownOptions: store.dropdownOptions
   };
   store.addLog(req.user.username, 'Downloaded a data backup snapshot');
   store.persist();
@@ -1720,6 +1764,11 @@ app.post('/api/restore', requireRole('admin'), (req, res) => {
   const snap = req.body || {};
   if (!Array.isArray(snap.assets)) {
     return res.status(400).json({ error: 'Invalid backup file — no "assets" array found.' });
+  }
+  if (snap.dropdownOptions != null) {
+    const dropdowns = store.validateDropdownOptions(snap.dropdownOptions);
+    if (dropdowns.error) return res.status(400).json({ error: `Invalid dropdown options in backup: ${dropdowns.error}` });
+    store.db.dropdownOptions = dropdowns.value;
   }
   // Re-validate every asset so a hand-edited or foreign file can't inject junk;
   // invalid rows are skipped rather than aborting the whole restore.
@@ -1881,6 +1930,13 @@ app.post('/api/restore', requireRole('admin'), (req, res) => {
     store.db.deletedRecords = safeDeleted;
   }
   if (Array.isArray(snap.logs)) store.db.logs = snap.logs.slice(0, 200).map(row => ({ ...row, action: typeof row?.action === 'string' ? row.action.replace(/\bUnassigned\b/gi, STOCK) : row?.action }));
+  if (Array.isArray(snap.signInEvents)) {
+    store.db.signInEvents = snap.signInEvents.slice(0, 5000)
+      .filter(row => row && (row.action === 'User logged in' || row.action === 'User logged out' || /^Sign-in failed \(attempt \d+\)$/.test(row.action) || /^Login locked after \d+ failed attempts$/.test(row.action)))
+      .map(row => ({ timestamp: clean(row.timestamp, 40), user: clean(row.user, 254), action: clean(row.action, 80) }));
+  } else if (Array.isArray(snap.logs)) {
+    store.db.signInEvents = snap.logs.filter(row => row && (row.action === 'User logged in' || row.action === 'User logged out' || /^Sign-in failed \(attempt \d+\)$/.test(row.action) || /^Login locked after \d+ failed attempts$/.test(row.action))).slice(0, 5000);
+  }
   // Keep the id sequence ahead of any restored id so new records never collide.
   const maxAssetId = cleanAssets.reduce((m, a) => Math.max(m, a.id), 0);
   const maxConsId = (store.db.consumables || []).reduce((m, c) => Math.max(m, Number(c.id) || 0), 0);
@@ -1910,7 +1966,7 @@ app.use((err, req, res, next) => {
 store.init().then(() => {
   app.listen(PORT, '0.0.0.0', () => console.log(`AssetFlow API listening on port ${PORT}`));
 }).catch(error => {
-  console.error('Could not start AssetFlow because the configured database is unavailable.');
+  console.error('Could not start AssetFlow because the local database is unavailable.');
   console.error(error.message);
   process.exitCode = 1;
 });

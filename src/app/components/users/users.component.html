@@ -51,7 +51,7 @@
     </div>
     <div class="glass-card rounded-2xl p-3 text-[11px] text-slate-500 dark:text-slate-300 mt-3 mb-4 flex items-start gap-2">
       <i class="fa-solid fa-shield-halved text-emerald-400 mt-0.5"></i>
-      <span>Backups include assets, employee notes, and audit logs. User accounts and passwords are never included. Restoring <span class="font-bold text-amber-400">replaces</span> all current asset data.</span>
+      <span>Backups include assets, employee notes, audit logs, and sign-in history. User accounts and passwords are never included. Restoring <span class="font-bold text-amber-400">replaces</span> all current asset data.</span>
     </div>
     <div class="flex flex-col sm:flex-row gap-3">
       <button (click)="downloadBackup()" [disabled]="backupBusy()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-2xl font-semibold flex items-center justify-center gap-2 text-xs shadow-md disabled:opacity-50">
@@ -83,17 +83,50 @@
       </div>
     </header>
     <div class="min-h-0 overflow-y-auto p-5 sm:p-6">
-      <p *ngIf="data.logsError()" class="rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs text-rose-500">{{ data.logsError() }}</p>
-      <div *ngIf="data.logsLoading() && signInHistory().length === 0" class="p-4 text-sm text-slate-500 dark:text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading sign-in activity…</div>
-      <div *ngIf="signInHistory().length === 0 && !data.logsLoading() && !data.logsError()" class="rounded-xl border border-slate-200/60 dark:border-white/10 p-4 text-sm text-slate-500 dark:text-slate-400">No sign-in activity is recorded yet.</div>
+      <p *ngIf="data.signInHistoryError()" class="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs text-rose-500">{{ data.signInHistoryError() }}</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">User name or email
+          <input type="search" [ngModel]="signInUserFilter()" (ngModelChange)="updateSignInUserFilter($event)" name="signInUserFilter" placeholder="Search users…" class="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm normal-case dark:text-white">
+        </label>
+        <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Event type
+          <app-custom-select class="block mt-1.5 normal-case" [options]="signInEventOptions" [value]="signInEventFilter()" (valueChange)="updateSignInEventFilter($event)"></app-custom-select>
+        </label>
+        <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">From date
+          <input type="date" [ngModel]="signInFromDate()" (ngModelChange)="updateSignInFromDate($event)" name="signInFromDate" class="glass-input sign-in-date mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm normal-case dark:text-white">
+        </label>
+        <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">To date
+          <input type="date" [ngModel]="signInToDate()" (ngModelChange)="updateSignInToDate($event)" name="signInToDate" class="glass-input sign-in-date mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm normal-case dark:text-white">
+        </label>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+        <span>{{ signInHistory().length }} matching event{{ signInHistory().length === 1 ? '' : 's' }}</span>
+        <button *ngIf="signInUserFilter() || signInFromDate() || signInToDate() || signInEventFilter() !== 'all'" type="button" (click)="clearSignInFilters()" class="text-indigo-500 hover:text-indigo-400 font-semibold">Clear filters</button>
+      </div>
+      <div *ngIf="data.signInHistoryLoading() && signInHistory().length === 0" class="p-4 text-sm text-slate-500 dark:text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading sign-in activity…</div>
+      <div *ngIf="!data.signInHistoryLoading() && !signInHistory().length && !data.signInHistoryError()" class="rounded-xl border border-slate-200/60 dark:border-white/10 p-4 text-sm text-slate-500 dark:text-slate-400">No sign-in activity matches these filters.</div>
       <ol *ngIf="signInHistory().length" class="divide-y divide-slate-200/50 dark:divide-white/10">
-        <li *ngFor="let event of signInHistory()" class="flex items-center gap-3 py-3 first:pt-1 last:pb-1">
-          <span class="w-8 h-8 shrink-0 rounded-xl bg-slate-500/10 flex items-center justify-center"><i class="fa-solid" [ngClass]="securityEventIcon(event.action)" aria-hidden="true"></i></span>
+        <li *ngFor="let event of signInHistoryPageRows()" class="flex items-center gap-3 py-3 first:pt-1 last:pb-1">
+          <span class="relative w-9 h-9 shrink-0 rounded-xl bg-slate-500/10 overflow-hidden flex items-center justify-center">
+            <img *ngIf="securityEventProfile(event.user)?.profileImage as profileImage" [src]="profileImage" alt="" class="w-full h-full object-cover">
+            <i *ngIf="!securityEventProfile(event.user)?.profileImage" class="fa-solid" [ngClass]="securityEventIcon(event.action)" aria-hidden="true"></i>
+          </span>
           <span class="min-w-0 flex-1"><span class="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{{ data.displayNameFor(event.user) }}</span><span class="block text-xs text-slate-500 dark:text-slate-400">{{ securityEventLabel(event.action) }}</span></span>
           <time class="shrink-0 text-right text-[11px] text-slate-500 dark:text-slate-400">{{ securityEventTime(event.timestamp) }}</time>
         </li>
       </ol>
-      <p class="mt-4 text-[11px] text-slate-500 dark:text-slate-400">Sign-in activity is also included in Activity Trail and retained with the latest audit events.</p>
+      <div *ngIf="signInHistory().length" class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/50 dark:border-white/10 pt-3 text-[11px] text-slate-500 dark:text-slate-400">
+        <div class="flex items-center gap-2">
+          <label for="signInPageSize">Rows per page</label>
+          <select id="signInPageSize" [ngModel]="signInPageSize()" (ngModelChange)="updateSignInPageSize($event)" name="signInPageSize" class="glass-input rounded-lg px-2 py-1.5 text-xs dark:text-white"><option [ngValue]="10">10</option><option [ngValue]="25">25</option><option [ngValue]="50">50</option></select>
+          <span>Showing {{ signInHistoryShowingStart() }}–{{ signInHistoryShowingEnd() }} of {{ signInHistory().length }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" (click)="previousSignInPage()" [disabled]="signInHistoryCurrentPage() <= 1" class="glass-card px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40">Previous</button>
+          <span>{{ signInHistoryCurrentPage() }} / {{ signInHistoryPages() }}</span>
+          <button type="button" (click)="nextSignInPage()" [disabled]="signInHistoryCurrentPage() >= signInHistoryPages()" class="glass-card px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40">Next</button>
+        </div>
+      </div>
+      <p class="mt-4 text-[11px] text-slate-500 dark:text-slate-400">Authentication events are retained separately from the Activity Trail. Signed-out events are recorded when users choose Sign out.</p>
     </div>
   </section>
 </div>
@@ -108,7 +141,7 @@
     <div class="min-h-0 overflow-y-auto p-5 sm:p-6 space-y-5">
       <div class="grid gap-4 md:grid-cols-[minmax(15rem,1fr)_2fr] md:items-end">
         <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">1. Select user
-          <select class="glass-input mt-2 w-full rounded-xl px-3 py-3 text-sm normal-case dark:text-white" [ngModel]="selectedAccessUser()" (ngModelChange)="selectAccessUser($event)" name="permissionUser"><option value="">Choose a user...</option><option *ngFor="let user of sortedUsers()" [value]="user.username">{{ user.displayName || user.username }} · {{ user.email || user.username }} · {{ user.role }}</option></select>
+          <app-custom-select class="block mt-2 normal-case" [options]="accessUserOptions()" [value]="selectedAccessUser()" (valueChange)="selectAccessUser($event)"></app-custom-select>
         </label>
         <div *ngIf="selectedUser() as user" class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3 text-xs text-slate-600 dark:text-slate-300"><strong class="text-slate-900 dark:text-white">{{ user.displayName || user.username }}</strong><span> · {{ user.role | titlecase }}</span><p *ngIf="user.role !== 'admin' && user.permissions == null" class="mt-1">Currently using the standard role permissions. Saving creates a custom permission set for this user only.</p><p *ngIf="user.role !== 'admin' && user.permissions != null" class="mt-1">Custom permissions are active for this user and replace their standard role access.</p><p *ngIf="user.role === 'admin'" class="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">Admin accounts retain full access to protect system administration.</p></div>
       </div>
@@ -128,7 +161,7 @@
             </tbody>
           </table>
         </div>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400"><i class="fa-solid fa-circle-info mr-1 text-sky-500"></i>System Users Management and Backup &amp; Restore stay admin-only. Permissions are checked by the API as well as the interface.</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400"><i class="fa-solid fa-circle-info mr-1 text-sky-500"></i>System Users Management and Backup &amp; Restore stay admin-only. Admins can grant Dropdown Data view or management individually. Permissions are checked by the API as well as the interface.</p>
       </div>
       <div *ngIf="!selectedUser()" class="rounded-2xl border border-dashed border-slate-300 dark:border-white/15 px-5 py-10 text-center text-sm text-slate-500"><i class="fa-solid fa-user-check mb-2 block text-2xl text-indigo-400"></i>Select a user to view and change only that user’s permissions.</div>
     </div>

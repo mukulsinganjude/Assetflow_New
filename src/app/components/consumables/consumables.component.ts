@@ -9,8 +9,6 @@ import { EmojiPickerComponent } from '../shared/emoji-picker.component';
 import { Consumable, SelectOption } from '../../models/models';
 import { MAX_IMPORT_ROWS, PageResult, exportXlsx, importFileLimitError, pageInfo, paginate } from '../../services/util';
 
-const CONSUMABLE_CATEGORIES = ['Cables', 'Adapters', 'Peripherals', 'Storage', 'Power', 'Accessories', 'Other'];
-const CONSUMABLE_UNITS = ['pcs', 'boxes', 'packs', 'sets', 'metres'];
 
 /** Empty draft used when opening the add form. */
 function blankDraft(): Partial<Consumable> {
@@ -33,9 +31,9 @@ export class ConsumablesComponent {
   canImport = () => this.auth.can('consumables.import');
   canExport = () => this.auth.can('consumables.export');
 
-  catOptions: SelectOption[] = [{ value: 'All', label: 'All Categories' }, ...CONSUMABLE_CATEGORIES.map(c => ({ value: c, label: c }))];
-  formCatOptions: SelectOption[] = CONSUMABLE_CATEGORIES.map(c => ({ value: c, label: c }));
-  unitOptions: SelectOption[] = CONSUMABLE_UNITS.map(u => ({ value: u, label: u }));
+  catOptions = computed<SelectOption[]>(() => [{ value: 'All', label: 'All Categories' }, ...this.data.consumableCategories().map(c => ({ value: c, label: c }))]);
+  formCatOptions = computed<SelectOption[]>(() => this.data.consumableCategories().map(c => ({ value: c, label: c })));
+  unitOptions = computed<SelectOption[]>(() => this.data.consumableUnits().map(u => ({ value: u, label: u })));
   sizeOptions: SelectOption[] = [{ value: '10', label: '10' }, { value: '20', label: '20' }, { value: '50', label: '50' }, { value: 'All', label: 'All' }];
 
   search = signal('');

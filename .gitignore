@@ -10,4 +10,5 @@ server/.env.*
 !server/.env.example
 server/.jwt-secret
 server/data.json
+server/data.json.tmp
 server/data.json.corrupt-*.json

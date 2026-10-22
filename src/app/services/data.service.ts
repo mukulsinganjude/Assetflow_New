@@ -17,6 +17,8 @@ export const CATALOG: Record<string, string[]> = {
 export const CATEGORIES = ['Laptop', 'Monitor', 'Mouse', 'Docking Station', 'Headset'];
 export const DEPARTMENTS = ['IT', 'BPS', 'HR', 'Finance', 'Admin'];
 export const STATUSES = ['In Use', 'In Storage', 'Under Repair'];
+export interface DropdownOptions { assetCategories: string[]; assetModels: Record<string, string[]>; deskCategories: string[]; consumableCategories: string[]; consumableUnits: string[]; }
+const DEFAULT_DROPDOWNS: DropdownOptions = { assetCategories: [...CATEGORIES], assetModels: structuredClone(CATALOG), deskCategories: ['Monitor', 'Docking Station'], consumableCategories: ['Cables', 'Adapters', 'Peripherals', 'Storage', 'Power', 'Accessories', 'Other'], consumableUnits: ['pcs', 'boxes', 'packs', 'sets', 'metres'] };
 
 export interface ArchivedRecord {
   id: number;
@@ -27,6 +29,7 @@ export interface ArchivedRecord {
 }
 
 type Result = { ok: boolean; error?: string; asset?: Asset };
+interface SignInHistoryResponse { events: AuditLog[]; profiles: User[]; }
 
 /**
  * Reactive store backed by the REST API. Components still read the signals
@@ -42,8 +45,12 @@ export class DataService {
   private liveSyncVersion = '';
   private readonly onLiveSyncVisible = () => { if (document.visibilityState === 'visible') void this.checkForRemoteChanges(); };
 
-  readonly catalog = CATALOG;
-  readonly categories = CATEGORIES;
+  dropdownOptions = signal<DropdownOptions>(DEFAULT_DROPDOWNS);
+  readonly catalog = computed(() => this.dropdownOptions().assetModels);
+  readonly categories = computed(() => this.dropdownOptions().assetCategories);
+  readonly deskCategories = computed(() => this.dropdownOptions().deskCategories);
+  readonly consumableCategories = computed(() => this.dropdownOptions().consumableCategories);
+  readonly consumableUnits = computed(() => this.dropdownOptions().consumableUnits);
   readonly departments = DEPARTMENTS;
   readonly statuses = STATUSES;
 
@@ -87,7 +94,8 @@ export class DataService {
 
   private async refreshVisibleModule(path: string): Promise<void> {
     const route = path.split('?')[0];
-    if (route === '/dashboard' || route === '/entry') {
+    if (route === '/dropdowns') await this.loadDropdownOptions();
+    else if (route === '/dashboard' || route === '/entry') {
       await Promise.all([this.loadAssets(), this.loadDellCases()]);
     } else if (route === '/desk-setup') await this.loadDeskPeripherals();
     else if (route === '/consumables') await this.loadConsumables();
@@ -100,12 +108,16 @@ export class DataService {
     else if (route === '/warranty') await Promise.all([this.loadAssets(), this.loadDellCases()]);
     else if (route === '/links') await this.loadQuickLinks();
     else if (route === '/logs') await this.loadLogs();
-    else if (route === '/users') await Promise.all([this.loadUsers(), this.loadLogs()]);
+    else if (route === '/users') await this.loadUsers();
   }
 
   assets = signal<Asset[]>([]);
   users = signal<User[]>([]);
   auditLogs = signal<AuditLog[]>([]);
+  signInEvents = signal<AuditLog[]>([]);
+  signInProfiles = signal<User[]>([]);
+  signInHistoryLoading = signal(false);
+  signInHistoryError = signal('');
   logsLoading = signal(false);
   logsError = signal('');
   displayNameFor(username: string): string {
@@ -171,10 +183,15 @@ export class DataService {
   /** Reset every in-memory signal to empty. Called on logout so one user's data
    *  never lingers into the next session on the same browser tab. */
   clearAll(): void {
+    this.dropdownOptions.set(DEFAULT_DROPDOWNS);
     this.assets.set([]);
     this.users.set([]);
     this.auditLogs.set([]);
     this.logsError.set('');
+    this.signInEvents.set([]);
+    this.signInProfiles.set([]);
+    this.signInHistoryError.set('');
+    this.signInHistoryLoading.set(false);
     this.employeeComments.set({});
     this.consumables.set([]);
     this.consumablesLoading.set(false);
@@ -220,6 +237,30 @@ export class DataService {
       return false;
     } finally {
       this.logsLoading.set(false);
+    }
+  }
+  async loadDropdownOptions(): Promise<void> {
+    try { this.dropdownOptions.set(await firstValueFrom(this.api.get<DropdownOptions>('/dropdown-options'))); } catch { /* retain defaults on unavailable API */ }
+  }
+  async saveDropdownOptions(options: DropdownOptions): Promise<Result> {
+    try {
+      this.dropdownOptions.set(await firstValueFrom(this.api.put<DropdownOptions>('/dropdown-options', options)));
+      return { ok: true };
+    } catch (e) { return { ok: false, error: errorMessage(e, 'Could not save dropdown data.') }; }
+  }
+  async loadSignInHistory(): Promise<boolean> {
+    this.signInHistoryLoading.set(true);
+    this.signInHistoryError.set('');
+    try {
+      const history = await firstValueFrom(this.api.get<SignInHistoryResponse>('/sign-in-events'));
+      this.signInEvents.set(history.events || []);
+      this.signInProfiles.set(history.profiles || []);
+      return true;
+    } catch (e) {
+      this.signInHistoryError.set(errorMessage(e, 'Could not load sign-in activity.'));
+      return false;
+    } finally {
+      this.signInHistoryLoading.set(false);
     }
   }
   async loadConsumables(): Promise<void> {

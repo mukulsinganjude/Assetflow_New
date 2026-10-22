@@ -5,6 +5,7 @@ export const routes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
   { path: 'dashboard', canActivate: [sectionGuard], loadComponent: () => import('./components/dashboard/dashboard.component').then(m => m.DashboardComponent) },
   { path: 'entry', canActivate: [sectionGuard], loadComponent: () => import('./components/entry/entry.component').then(m => m.EntryComponent) },
+  { path: 'dropdowns', canActivate: [sectionGuard], loadComponent: () => import('./components/dropdown-manager/dropdown-manager.component').then(m => m.DropdownManagerComponent) },
   { path: 'desk-setup', canActivate: [sectionGuard], loadComponent: () => import('./components/desk-setup/desk-setup.component').then(m => m.DeskSetupComponent) },
   { path: 'links', canActivate: [sectionGuard], loadComponent: () => import('./components/links/links.component').then(m => m.LinksComponent) },
   { path: 'employees', canActivate: [sectionGuard], loadComponent: () => import('./components/employees/employees.component').then(m => m.EmployeesComponent) },

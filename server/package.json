@@ -1,13 +1,12 @@
 {
   "name": "assetflow-server",
   "version": "1.0.0",
-  "description": "AssetFlow backend API — Supabase persistence, JWT auth, bcrypt password hashing",
+  "description": "AssetFlow backend API — local JSON persistence, JWT auth, bcrypt password hashing",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "migrate:supabase": "node migrate-supabase.js"
+    "dev": "node server.js"
   },
   "private": true,
   "dependencies": {

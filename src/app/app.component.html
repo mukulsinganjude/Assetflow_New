@@ -60,6 +60,7 @@
 
 <!-- Main App Container -->
 <div *ngIf="auth.isLoggedIn()" class="assetflow-shell flex flex-col h-screen overflow-hidden relative animate-fade-in">
+    <div *ngIf="sidebarCollapsed && sidebarTooltip() as tip" class="nav-floating-tooltip pointer-events-none fixed z-[100] whitespace-nowrap" [style.top.px]="tip.top" [style.left.px]="tip.left">{{ tip.label }}</div>
     <div class="assetflow-topbar flex items-center justify-between px-5 h-14 shrink-0">
         <a routerLink="/dashboard" class="assetflow-brand flex items-center gap-2.5" aria-label="AssetFlow home">
             <span class="assetflow-brand-mark"><i class="fa-solid fa-cubes"></i></span>
@@ -201,14 +202,14 @@
                 <div *ngFor="let item of orderedSidebarItems()" class="sidebar-sort-row" [class.sidebar-sort-editing]="sidebarEditMode" [draggable]="sidebarEditMode" (dragstart)="startNavDrag($event, item.id, 'main')" (dragover)="allowNavDrop($event)" (drop)="dropNavItem($event, item.id, 'main')" (dragend)="endNavDrag()">
                     <ng-container *ngIf="item.id === 'assets'; else regularSidebarLink">
                         <div class="flex items-center gap-1">
-                            <button type="button" (click)="toggleAssetsMenu()" [disabled]="sidebarEditMode" [attr.aria-expanded]="sidebarEditMode || assetsMenuOpen" aria-controls="assets-submenu" aria-label="Assets" title="Assets" class="flex-1 w-full flex items-center space-x-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 px-4 py-3 rounded-2xl font-medium transition" [ngClass]="isAssetsRouteActive() ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' : ''">
+                            <button type="button" (click)="toggleAssetsMenu()" [disabled]="sidebarEditMode" [attr.aria-expanded]="sidebarEditMode || assetsMenuOpen" aria-controls="assets-submenu" aria-label="Assets" (mouseenter)="showSidebarTooltip($event, 'Assets')" (mouseleave)="hideSidebarTooltip()" (focus)="showSidebarTooltip($event, 'Assets')" (blur)="hideSidebarTooltip()" class="flex-1 w-full flex items-center space-x-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 px-4 py-3 rounded-2xl font-medium transition" [ngClass]="isAssetsRouteActive() ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' : ''">
                                 <i *ngIf="sidebarEditMode" class="nav-drag-handle fa-solid fa-ellipsis-vertical" aria-hidden="true"></i><i class="fa-solid fa-boxes-stacked w-5 text-indigo-400"></i><span class="flex-1 text-left">Assets</span><i class="fa-solid text-[10px] transition-transform" [class.fa-chevron-down]="sidebarEditMode || assetsMenuOpen" [class.fa-chevron-right]="!sidebarEditMode && !assetsMenuOpen"></i>
                             </button>
                         </div>
                         <div *ngIf="sidebarEditMode || assetsMenuOpen" id="assets-submenu" class="assets-submenu ml-5 mt-1 pl-3 border-l border-slate-300/70 dark:border-white/10 space-y-1" (dragover)="allowNavDrop($event)" (drop)="dropNavAtEnd($event, 'assets')">
                             <div *ngFor="let child of orderedAssetChildren()" class="sidebar-sort-row" [class.sidebar-sort-editing]="sidebarEditMode" [draggable]="sidebarEditMode" (dragstart)="startNavDrag($event, child.id, 'assets')" (dragover)="allowNavDrop($event)" (drop)="dropNavItem($event, child.id, 'assets')" (dragend)="endNavDrag()">
                                 <div class="flex items-center gap-1">
-                                    <a [routerLink]="sidebarEditMode ? null : child.route" (click)="handleNavClick($event)" [routerLinkActive]="'bg-gradient-to-r from-indigo-600 to-purple-600 !text-white shadow-lg shadow-indigo-600/30 font-semibold'" [attr.aria-label]="child.label" [title]="child.label" class="flex-1 min-w-0 flex items-center space-x-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 px-3 py-2.5 rounded-xl text-sm font-medium transition">
+                                    <a [routerLink]="sidebarEditMode ? null : child.route" (click)="handleNavClick($event)" [routerLinkActive]="'bg-gradient-to-r from-indigo-600 to-purple-600 !text-white shadow-lg shadow-indigo-600/30 font-semibold'" [attr.aria-label]="child.label" (mouseenter)="showSidebarTooltip($event, child.label)" (mouseleave)="hideSidebarTooltip()" (focus)="showSidebarTooltip($event, child.label)" (blur)="hideSidebarTooltip()" class="flex-1 min-w-0 flex items-center space-x-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 px-3 py-2.5 rounded-xl text-sm font-medium transition">
                                         <i *ngIf="sidebarEditMode" class="nav-drag-handle fa-solid fa-ellipsis-vertical" aria-hidden="true"></i><i class="fa-solid w-5" [ngClass]="[child.icon, child.iconColor]"></i><span>{{ child.label }}</span>
                                     </a>
                                 </div>
@@ -217,7 +218,7 @@
                     </ng-container>
                     <ng-template #regularSidebarLink>
                         <div class="flex items-center gap-1">
-                            <a [routerLink]="sidebarEditMode ? null : item.route" (click)="handleNavClick($event)" [routerLinkActive]="'bg-gradient-to-r from-indigo-600 to-purple-600 !text-white shadow-lg shadow-indigo-600/30 font-semibold'" [attr.aria-label]="item.label" [title]="item.label" class="flex-1 min-w-0 flex items-center space-x-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 px-4 py-3 rounded-2xl font-medium transition">
+                            <a [routerLink]="sidebarEditMode ? null : item.route" (click)="handleNavClick($event)" [routerLinkActive]="'bg-gradient-to-r from-indigo-600 to-purple-600 !text-white shadow-lg shadow-indigo-600/30 font-semibold'" [attr.aria-label]="item.label" (mouseenter)="showSidebarTooltip($event, item.label)" (mouseleave)="hideSidebarTooltip()" (focus)="showSidebarTooltip($event, item.label)" (blur)="hideSidebarTooltip()" class="flex-1 min-w-0 flex items-center space-x-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 px-4 py-3 rounded-2xl font-medium transition">
                                 <i *ngIf="sidebarEditMode" class="nav-drag-handle fa-solid fa-ellipsis-vertical" aria-hidden="true"></i><i class="fa-solid w-5" [ngClass]="[item.icon, item.iconColor]"></i><span>{{ item.label }}</span>
                             </a>
                         </div>

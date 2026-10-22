@@ -29,17 +29,11 @@ export class DeskSetupComponent implements OnInit {
   serial = '';
 
   /** Only fixed desk equipment is tracked here. */
-  readonly deskCategories = ['Monitor', 'Docking Station'];
+  readonly deskCategories = this.data.deskCategories;
   /** Category options for the add/edit dropdown (first entry acts as a placeholder). */
-  readonly categoryOptions: SelectOption[] = [
-    { value: '', label: 'Select category' },
-    ...this.deskCategories.map(c => ({ value: c, label: c }))
-  ];
+  readonly categoryOptions = computed<SelectOption[]>(() => [{ value: '', label: 'Select category' }, ...this.deskCategories().map(c => ({ value: c, label: c }))]);
   /** Category options for the table filter (All + each category). */
-  readonly catFilterOptions: SelectOption[] = [
-    { value: 'All', label: 'All Categories' },
-    ...this.deskCategories.map(c => ({ value: c, label: c }))
-  ];
+  readonly catFilterOptions = computed<SelectOption[]>(() => [{ value: 'All', label: 'All Categories' }, ...this.deskCategories().map(c => ({ value: c, label: c }))]);
   readonly sizeOptions: SelectOption[] = [
     { value: '10', label: '10' }, { value: '20', label: '20' },
     { value: '50', label: '50' }, { value: '100', label: '100' }, { value: 'All', label: 'All' }
@@ -47,7 +41,7 @@ export class DeskSetupComponent implements OnInit {
   /** Item-model options for the add/edit dropdown, driven by the chosen category. */
   modelOptions(): SelectOption[] {
     if (!this.category) return [{ value: '', label: 'Select a category first' }];
-    const models = this.data.catalog[this.category] || [];
+    const models = this.data.catalog()[this.category] || [];
     return [{ value: '', label: 'Select item model' }, ...models.map(m => ({ value: m, label: m }))];
   }
   canView = () => this.auth.can('deskSetup.view');

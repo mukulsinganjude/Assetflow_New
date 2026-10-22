@@ -74,7 +74,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     return a?.comments ?? [];
   });
 
-  editCategoryOptions: SelectOption[] = [];
+  editCategoryOptions = computed<SelectOption[]>(() => this.data.categories().map(c => ({ value: c, label: c })));
   editDeptOptions: SelectOption[] = [];
   editStatusOptions: SelectOption[] = [];
   assignmentTypeOptions: SelectOption[] = [{ value: 'Primary', label: 'Primary' }, { value: 'Temporary', label: 'Temporary' }];
@@ -90,7 +90,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   ePurchaseDate = '';
   eWarrantyDate = '';
 
-  editModelOptions = computed<SelectOption[]>(() => (this.data.catalog[this.eCategory()] || []).map(m => ({ value: m, label: m })));
+  editModelOptions = computed<SelectOption[]>(() => (this.data.catalog()[this.eCategory()] || []).map(m => ({ value: m, label: m })));
   assignableEmployees = computed<string[]>(() => [...this.data.employeeRoster().map(employee => employee.name), 'Stock']);
 
   categoryIcon = categoryIcon;
@@ -98,7 +98,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   pageInfo = pageInfo;
   Infinity = Infinity;
 
-  categoryOptions: SelectOption[] = [];
+  categoryOptions = computed<SelectOption[]>(() => [{ value: 'All', label: 'All Categories' }, ...this.data.categories().map(c => ({ value: c, label: c }))]);
   deptOptions: SelectOption[] = [];
   bulkOptions: SelectOption[] = [];
   sizeOptions: SelectOption[] = [{ value: '10', label: '10' }, { value: '20', label: '20' }, { value: '50', label: '50' }, { value: '100', label: '100' }];
@@ -166,10 +166,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   constructor(public data: DataService, public auth: AuthService, public theme: ThemeService, private ui: UiService) {
-    this.categoryOptions = [{ value: 'All', label: 'All Categories' }, ...this.data.categories.map(c => ({ value: c, label: c }))];
     this.deptOptions = [{ value: 'All', label: 'All Departments' }, ...[...this.data.departments, 'Stock'].map(d => ({ value: d, label: d }))];
     this.bulkOptions = [{ value: '', label: 'Update Status...' }, ...this.data.statuses.map(s => ({ value: s, label: s }))];
-    this.editCategoryOptions = this.data.categories.map(c => ({ value: c, label: c }));
     this.editDeptOptions = [...this.data.departments, 'Stock'].map(d => ({ value: d, label: d }));
     this.editStatusOptions = this.data.statuses.map(s => ({ value: s, label: s }));
     effect(() => {
@@ -234,7 +232,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const textColor = document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b';
     const el = (id: string) => document.getElementById(id) as HTMLCanvasElement | null;
 
-    const categories = this.data.categories;
+    const categories = this.data.categories();
     const catCounts = categories.map(cat => dataset.filter(i => i.category === cat).length);
     const cCat = el('categoryChart');
     if (cCat) {

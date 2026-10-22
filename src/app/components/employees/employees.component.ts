@@ -72,7 +72,7 @@ export class EmployeesComponent {
   });
 
   /** Category filter — an employee matches if they hold at least one asset of that category. */
-  catOptions: SelectOption[] = [{ value: 'All', label: 'All Categories' }, ...this.data.categories.map(c => ({ value: c, label: c }))];
+  catOptions = computed<SelectOption[]>(() => [{ value: 'All', label: 'All Categories' }, ...this.data.categories().map(c => ({ value: c, label: c }))]);
 
   /** Status filter — an employee matches if at least one of their assets has that status. */
   statusOptions: SelectOption[] = [{ value: 'All', label: 'All Statuses' }, ...this.data.statuses.map(s => ({ value: s, label: s }))];

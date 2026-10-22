@@ -28,7 +28,7 @@
       </div>
       <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 w-full xl:w-72 min-w-0">
         <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Category:</label>
-        <div class="w-full min-w-0"><app-custom-select [options]="catFilterOptions" [value]="catFilter()" (valueChange)="catFilter.set($event); onFilter()"></app-custom-select></div>
+        <div class="w-full min-w-0"><app-custom-select [options]="catFilterOptions()" [value]="catFilter()" (valueChange)="catFilter.set($event); onFilter()"></app-custom-select></div>
       </div>
     </div>
 
@@ -98,7 +98,7 @@
           <input [(ngModel)]="deskNo" name="deskNo" required maxlength="40" placeholder="e.g. Desk 104" class="glass-input w-full mt-1 rounded-xl px-3 py-2.5 text-sm normal-case dark:text-white">
         </label>
         <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Category <span class="text-rose-500">*</span>
-          <app-custom-select class="block mt-1" [options]="categoryOptions" [value]="category" (valueChange)="onCategoryChange($event)"></app-custom-select>
+          <app-custom-select class="block mt-1" [options]="categoryOptions()" [value]="category" (valueChange)="onCategoryChange($event)"></app-custom-select>
         </label>
         <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Item model / name <span class="text-rose-500">*</span>
           <app-custom-select class="block mt-1" [options]="modelOptions()" [value]="model" (valueChange)="model = $event"></app-custom-select>

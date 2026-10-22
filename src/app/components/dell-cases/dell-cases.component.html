@@ -11,7 +11,7 @@
     </div>
     <div class="p-5 border-b border-slate-200/50 dark:border-white/10 flex flex-col lg:flex-row gap-3 lg:items-center">
       <div class="relative w-full lg:max-w-md"><i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i><input [ngModel]="search()" (ngModelChange)="onSearch($event)" placeholder="Search employee, asset, case ID, or status" class="glass-input w-full rounded-xl pl-9 pr-3 py-2.5 text-sm dark:text-white"></div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto lg:ml-auto"><app-custom-select class="min-w-[180px]" [options]="categoryFilterOptions" [value]="categoryFilter()" (valueChange)="setCategoryFilter($event)"></app-custom-select><app-custom-select class="min-w-[220px]" [options]="modelFilterOptions()" [value]="modelFilter()" [searchable]="true" searchPlaceholder="Search item models..." (valueChange)="setModelFilter($event)"></app-custom-select></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto lg:ml-auto"><app-custom-select class="min-w-[180px]" [options]="categoryFilterOptions()" [value]="categoryFilter()" (valueChange)="setCategoryFilter($event)"></app-custom-select><app-custom-select class="min-w-[220px]" [options]="modelFilterOptions()" [value]="modelFilter()" [searchable]="true" searchPlaceholder="Search item models..." (valueChange)="setModelFilter($event)"></app-custom-select></div>
     </div>
     <p *ngIf="data.dellCasesError()" class="mx-5 mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-500">{{ data.dellCasesError() }}</p>
     <div class="overflow-x-auto">
@@ -44,7 +44,7 @@
           <app-custom-select class="block w-full mt-1 normal-case" [options]="employeeOptions()" [value]="employeeName" [searchable]="true" searchPlaceholder="Search employees..." (valueChange)="setEmployeeName($event)"></app-custom-select>
         </label>
         <label class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Category <span class="text-rose-500">*</span>
-          <app-custom-select class="block w-full mt-1 normal-case" [options]="categoryOptions" [value]="category" (valueChange)="setCategory($event)"></app-custom-select>
+          <app-custom-select class="block w-full mt-1 normal-case" [options]="categoryOptions()" [value]="category" (valueChange)="setCategory($event)"></app-custom-select>
         </label>
         <label class="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Item model / name <span class="text-rose-500">*</span>
           <app-custom-select class="block w-full mt-1 normal-case" [options]="caseModelOptions()" [value]="assetModel" (valueChange)="assetModel = $event"></app-custom-select>

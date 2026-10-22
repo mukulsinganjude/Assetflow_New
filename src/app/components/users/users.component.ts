@@ -29,6 +29,10 @@ export class UsersComponent implements OnInit {
     { value: 'entry', label: 'Data Entry' },
     { value: 'admin', label: 'Admin (Full Access)' }
   ];
+  readonly signInEventOptions: SelectOption[] = [
+    { value: 'all', label: 'All events' }, { value: 'in', label: 'Signed in' },
+    { value: 'out', label: 'Signed out' }, { value: 'failed', label: 'Failed / blocked' }
+  ];
 
   modalOpen = signal(false);
   newDisplayName = '';
@@ -49,6 +53,12 @@ export class UsersComponent implements OnInit {
 
   accessOpen = signal(false);
   signInHistoryOpen = signal(false);
+  signInUserFilter = signal('');
+  signInFromDate = signal('');
+  signInToDate = signal('');
+  signInEventFilter = signal('all');
+  signInPage = signal(1);
+  signInPageSize = signal(10);
   selectedAccessUser = signal('');
   selectedPermissions = signal<string[]>([]);
   savingPermissions = signal(false);
@@ -71,10 +81,44 @@ export class UsersComponent implements OnInit {
       asc ? val(a).localeCompare(val(b)) : val(b).localeCompare(val(a)));
   });
 
-  /** Recent authentication events are shown separately from routine asset activity. */
-  signInHistory = computed(() => this.data.auditLogs()
-    .filter(log => log.action === 'User logged in' || log.action === 'User logged out' || /^Sign-in failed \(attempt \d+\)$/.test(log.action) || /^Login locked after \d+ failed attempts$/.test(log.action))
-    .slice(0, 12));
+  /** Authentication events have their own longer retention and filters. */
+  signInHistory = computed(() => {
+    const userQuery = this.signInUserFilter().trim().toLowerCase();
+    const fromDate = this.signInFromDate();
+    const toDate = this.signInToDate();
+    const eventFilter = this.signInEventFilter();
+    return this.data.signInEvents().filter(event => {
+      const eventDate = this.localDateKey(event.timestamp);
+      if (fromDate && (!eventDate || eventDate < fromDate)) return false;
+      if (toDate && (!eventDate || eventDate > toDate)) return false;
+      if (userQuery) {
+        const profile = this.securityEventProfile(event.user);
+        const searchable = [event.user, this.data.displayNameFor(event.user), profile?.email, profile?.displayName]
+          .filter(Boolean).join(' ').toLowerCase();
+        if (!searchable.includes(userQuery)) return false;
+      }
+      if (eventFilter === 'in' && event.action !== 'User logged in') return false;
+      if (eventFilter === 'out' && event.action !== 'User logged out') return false;
+      if (eventFilter === 'failed' && !event.action.startsWith('Sign-in failed') && !event.action.startsWith('Login locked')) return false;
+      return true;
+    });
+  });
+  accessUserOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Choose a user...' },
+    ...this.sortedUsers().map(user => ({
+      value: user.username,
+      label: `${user.displayName || user.username} · ${user.email || user.username} · ${user.role}`
+    }))
+  ]);
+  signInHistoryPages = computed(() => Math.max(1, Math.ceil(this.signInHistory().length / this.signInPageSize())));
+  signInHistoryCurrentPage = computed(() => Math.min(this.signInPage(), this.signInHistoryPages()));
+  signInHistoryPageRows = computed(() => {
+    const size = this.signInPageSize();
+    const start = (this.signInHistoryCurrentPage() - 1) * size;
+    return this.signInHistory().slice(start, start + size);
+  });
+  signInHistoryShowingStart = computed(() => this.signInHistory().length ? (this.signInHistoryCurrentPage() - 1) * this.signInPageSize() + 1 : 0);
+  signInHistoryShowingEnd = computed(() => Math.min(this.signInHistoryCurrentPage() * this.signInPageSize(), this.signInHistory().length));
 
   sort(field: string) {
     if (this.sortField() === field) this.sortAsc.set(!this.sortAsc());
@@ -91,7 +135,34 @@ export class UsersComponent implements OnInit {
     this.refreshSignInHistory();
   }
   closeSignInHistory() { this.signInHistoryOpen.set(false); }
-  refreshSignInHistory() { void this.data.loadLogs(); }
+  refreshSignInHistory() { void this.data.loadSignInHistory(); }
+  private localDateKey(timestamp: string): string {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  securityEventProfile(username: string): User | undefined {
+    const sought = String(username || '').trim().toLowerCase();
+    return this.data.signInProfiles().find(profile =>
+      profile.username.toLowerCase() === sought || String(profile.email || '').toLowerCase() === sought);
+  }
+  updateSignInUserFilter(value: string) { this.signInUserFilter.set(value); this.signInPage.set(1); }
+  updateSignInFromDate(value: string) { this.signInFromDate.set(value); this.signInPage.set(1); }
+  updateSignInToDate(value: string) { this.signInToDate.set(value); this.signInPage.set(1); }
+  updateSignInEventFilter(value: string) { this.signInEventFilter.set(value); this.signInPage.set(1); }
+  updateSignInPageSize(value: number) { this.signInPageSize.set(value); this.signInPage.set(1); }
+  clearSignInFilters() {
+    this.signInUserFilter.set('');
+    this.signInFromDate.set('');
+    this.signInToDate.set('');
+    this.signInEventFilter.set('all');
+    this.signInPage.set(1);
+  }
+  previousSignInPage() { this.signInPage.set(Math.max(1, this.signInHistoryCurrentPage() - 1)); }
+  nextSignInPage() { this.signInPage.set(Math.min(this.signInHistoryPages(), this.signInHistoryCurrentPage() + 1)); }
   securityEventLabel(action: string): string {
     if (action === 'User logged in') return 'Signed in';
     if (action === 'User logged out') return 'Signed out';
@@ -117,7 +188,7 @@ export class UsersComponent implements OnInit {
   }
   closeAccess() { if (!this.savingPermissions()) this.accessOpen.set(false); }
   selectedUser(): User | undefined { return this.data.users().find(user => user.username === this.selectedAccessUser()); }
-  hasPermission(key: string): boolean { return this.selectedPermissions().includes(key); }
+  hasPermission(key: string): boolean { return this.selectedPermissions().includes(key) || (key === 'dropdowns.view' && this.selectedPermissions().includes('dropdowns.manage')); }
   permissionKey(section: string, action: string): string { return `${section}.${action}`; }
   permissionAction(section: string, action: string): PermissionAction | undefined { return this.permissionSections.find(group => group.key === section)?.actions.find(item => item.key === action); }
   hasSectionAction(section: string, action: string): boolean { return !!this.permissionAction(section, action); }

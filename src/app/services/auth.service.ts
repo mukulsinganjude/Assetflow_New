@@ -30,14 +30,14 @@ export class AuthService {
     if (!user) return false;
     if (user.role === 'admin') return true;
     const permissions = user.permissions == null ? roleDefaultPermissions(user.role) : user.permissions;
-    return permissions.includes(permission);
+    return permissions.includes(permission) || (permission === 'dropdowns.view' && permissions.includes('dropdowns.manage'));
   }
   canAny(...permissions: string[]): boolean { return permissions.some(permission => this.can(permission)); }
 
   constructor() {
     // Restore an existing session on reload: if a token is present, pull data.
     if (this.currentUser()) {
-      this.data.loadAssets(); this.data.loadEmployeeComments(); this.data.loadEmployees(); this.data.loadDellCases();
+      this.data.loadAssets(); this.data.loadEmployeeComments(); this.data.loadEmployees(); this.data.loadDellCases(); this.data.loadDropdownOptions();
       this.refreshCurrentUser();
     }
   }
@@ -82,6 +82,7 @@ export class AuthService {
       localStorage.setItem(USER_KEY, JSON.stringify(res.user));
       this.currentUser.set(res.user);
       await this.data.loadAssets();
+      await this.data.loadDropdownOptions();
       this.data.loadEmployeeComments();
       this.data.loadEmployees();
       this.data.loadDellCases();

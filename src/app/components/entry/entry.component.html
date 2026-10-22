@@ -50,7 +50,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full xl:w-[420px] min-w-0">
         <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 min-w-0">
           <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Category:</label>
-          <div class="w-full min-w-0"><app-custom-select [options]="catFilterOptions" [value]="catFilter()" (valueChange)="catFilter.set($event); onFilter()"></app-custom-select></div>
+          <div class="w-full min-w-0"><app-custom-select [options]="catFilterOptions()" [value]="catFilter()" (valueChange)="catFilter.set($event); onFilter()"></app-custom-select></div>
         </div>
         <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 min-w-0">
           <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Dept:</label>
@@ -173,7 +173,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Category <span class="text-indigo-500" aria-label="required">*</span></label>
-          <app-custom-select [options]="categoryOptions" [value]="fCategory()" (valueChange)="onCategoryChange($event)"></app-custom-select>
+          <app-custom-select [options]="categoryOptions()" [value]="fCategory()" (valueChange)="onCategoryChange($event)"></app-custom-select>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Item Model / Name <span class="text-indigo-500" aria-label="required">*</span></label>
@@ -294,7 +294,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Category</label>
-          <app-custom-select [options]="categoryOptions" [value]="eCategory()" (valueChange)="onEditCategoryChange($event)"></app-custom-select>
+          <app-custom-select [options]="categoryOptions()" [value]="eCategory()" (valueChange)="onEditCategoryChange($event)"></app-custom-select>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Item Model / Name</label>

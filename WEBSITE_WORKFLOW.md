@@ -119,7 +119,7 @@ The application has three built-in role defaults. An administrator can also gran
 - **Status meanings:** Asset status indicates whether equipment is **In Use**, **In Storage**, or **Under Repair**.
 - **Return condition:** **Good** items can return to storage; **Damaged** or **Needs repair** items should be routed for repair.
 - **Validation:** Serial numbers identify assets; check that they are correct and unique before saving or importing. Use company email addresses for accounts.
-- **Presence:** The online list is shared only by users connected to the same API service. A local development website and the hosted website may show separate lists.
+- **Presence:** The online list is shared only by users connected to the same running API service.
 - **Permissions:** If a tab or action is missing, ask an administrator to review your role and any individual permission override.
 - **Imports and exports:** Use the relevant module’s template when available, review the data before importing, and check the result/skipped-row messages afterward.
 - **Mobile:** The navigation opens as a drawer. Close it after choosing a screen; tables and wide forms may need horizontal scrolling within their own panel.
@@ -131,7 +131,7 @@ The application has three built-in role defaults. An administrator can also gran
 Something looks wrong
 ├── Missing screen/action → ask an administrator to check role/user permissions
 ├── Data is missing or outdated → refresh; verify filters; check the right environment
-├── Sign-in/API error → confirm the hosted API is healthy and review hosting logs
+├── Sign-in/API error → confirm the local API is running at http://localhost:3000/api/health
 ├── Incorrect asset/employee data → correct it in its owning module and verify the audit trail
 └── Need more context → open the in-app Guide and search for the tab or task
 ```

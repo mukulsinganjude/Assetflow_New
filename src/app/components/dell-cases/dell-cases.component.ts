@@ -5,7 +5,6 @@ import { AuthService } from '../../services/auth.service';
 import { DataService } from '../../services/data.service';
 import { UiService } from '../../services/ui.service';
 import { DellCase, SelectOption } from '../../models/models';
-import { CATEGORIES } from '../../services/data.service';
 import { EmojiPickerComponent } from '../shared/emoji-picker.component';
 import { CustomSelectComponent } from '../shared/custom-select.component';
 import { CommentsModalComponent } from '../shared/comments-modal.component';
@@ -27,13 +26,13 @@ export class DellCasesComponent implements OnInit {
   employeeName = 'Stock'; category = ''; assetModel = ''; assetSerial = ''; registeredDate = ''; caseId = ''; issueDescription = ''; registeredBy = ''; status = 'Unresolved';
   statuses: DellCase['status'][] = ['Resolved', 'Unresolved', 'Closed without resolved'];
   statusOptions: SelectOption[] = this.statuses.map(value => ({ value, label: value }));
-  categoryOptions: SelectOption[] = [{ value: '', label: 'Select category...' }, ...CATEGORIES.map(value => ({ value, label: value }))];
-  categoryFilterOptions: SelectOption[] = [{ value: '', label: 'All categories' }, ...CATEGORIES.map(value => ({ value, label: value }))];
+  categoryOptions = computed<SelectOption[]>(() => [{ value: '', label: 'Select category...' }, ...this.data.categories().map(value => ({ value, label: value }))]);
+  categoryFilterOptions = computed<SelectOption[]>(() => [{ value: '', label: 'All categories' }, ...this.data.categories().map(value => ({ value, label: value }))]);
   employeeNames = computed(() => [...new Set([...this.data.employeeRoster().map(e => e.name), ...this.data.formerEmployees().map(e => e.name)])]);
   employeeOptions = computed<SelectOption[]>(() => [...new Set(['Stock', ...this.employeeNames()])]
     .map(name => ({ value: name, label: name })));
   activeEmployeeOptions = computed<SelectOption[]>(() => this.data.employeeRoster().map(employee => ({ value: employee.name, label: employee.name })));
-  assetModels = computed(() => [...new Set([...Object.values(this.data.catalog).flat(), ...this.data.assets().map(a => a.name), ...this.data.formerEmployees().flatMap(e => e.assets.map(a => a.name))])]);
+  assetModels = computed(() => [...new Set([...Object.values(this.data.catalog()).flat(), ...this.data.assets().map(a => a.name), ...this.data.formerEmployees().flatMap(e => e.assets.map(a => a.name))])]);
   caseModelOptions = () => [
     { value: '', label: 'Select item model...' },
     ...this.assetModels().filter(model => !this.category || this.categoryForModel(model) === this.category).map(model => ({ value: model, label: model }))
@@ -43,7 +42,7 @@ export class DellCasesComponent implements OnInit {
     ...[...new Set(this.data.dellCases().map(row => row.assetModel))].sort().map(model => ({ value: model, label: model }))
   ]);
   categoryForModel(model: string): string {
-    for (const [category, models] of Object.entries(this.data.catalog)) if (models.includes(model)) return category;
+    for (const [category, models] of Object.entries(this.data.catalog())) if (models.includes(model)) return category;
     return this.data.assets().find(asset => asset.name === model)?.category
       || this.data.formerEmployees().flatMap(employee => employee.assets).find(asset => asset.name === model)?.category
       || '';

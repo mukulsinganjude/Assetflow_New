@@ -1,10 +1,9 @@
 'use strict';
 /**
- * AssetFlow state store. Uses Supabase when configured, with a local JSON
- * fallback for development and for bootstrapping a new Supabase project.
+ * AssetFlow state store backed by a local JSON database.
  *
  * The API keeps a synchronous in-memory view and serializes durable snapshots
- * to one Supabase JSONB row or server/data.json.
+ * to server/data.json.
  */
 const fs = require('fs');
 const path = require('path');
@@ -12,25 +11,23 @@ const bcrypt = require('bcryptjs');
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 const ENV_FILE = path.join(__dirname, '..', '.env.local');
-const SUPABASE_TABLE = 'assetflow_state';
 const STOCK_LABEL = 'Stock';
+const MAX_SIGN_IN_EVENTS = 5000;
+const isSignInEvent = action => action === 'User logged in' || action === 'User logged out' ||
+  /^Sign-in failed \(attempt \d+\)$/.test(action) || /^Login locked after \d+ failed attempts$/.test(action);
 const isStockValue = value => ['stock', 'unassigned'].includes(String(value || '').trim().toLowerCase());
 const normalizeStockValue = value => isStockValue(value) ? STOCK_LABEL : String(value || '').trim();
 
-// Load only the app's private server settings; shell/deployment values win.
+// Load only the app's private server settings; shell values win.
 if (fs.existsSync(ENV_FILE)) {
   for (const line of fs.readFileSync(ENV_FILE, 'utf8').split(/\r?\n/)) {
-    const match = line.match(/^\s*(ASSETFLOW_STORAGE|SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|ASSETFLOW_BOOTSTRAP_ADMIN_EMAIL|ASSETFLOW_BOOTSTRAP_ADMIN_PASSWORD|ASSETFLOW_BOOTSTRAP_ADMIN_NAME)\s*=\s*(.*?)\s*$/);
+    const match = line.match(/^\s*(ASSETFLOW_BOOTSTRAP_ADMIN_EMAIL|ASSETFLOW_BOOTSTRAP_ADMIN_PASSWORD|ASSETFLOW_BOOTSTRAP_ADMIN_NAME|JWT_SECRET)\s*=\s*(.*?)\s*$/);
     if (!match || process.env[match[1]]) continue;
     let value = match[2];
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
     process.env[match[1]] = value;
   }
 }
-
-const supabaseUrl = String(process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
-const supabaseKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-const storageMode = String(process.env.ASSETFLOW_STORAGE || (supabaseUrl || supabaseKey ? 'supabase' : 'local')).trim().toLowerCase();
 
 const CATALOG = {
   'Laptop': [
@@ -61,6 +58,44 @@ const DEFAULT_ASSETS = [
 // serial-tracked assets above. Each row is a stock line with a reorder threshold.
 const CONSUMABLE_CATEGORIES = ['Cables', 'Adapters', 'Peripherals', 'Storage', 'Power', 'Accessories', 'Other'];
 const CONSUMABLE_UNITS = ['pcs', 'boxes', 'packs', 'sets', 'metres'];
+const DEFAULT_DROPDOWN_OPTIONS = {
+  assetCategories: [...CATEGORIES], assetModels: JSON.parse(JSON.stringify(CATALOG)),
+  deskCategories: ['Monitor', 'Docking Station'],
+  consumableCategories: [...CONSUMABLE_CATEGORIES], consumableUnits: [...CONSUMABLE_UNITS]
+};
+function normalizeDropdownOptions(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const list = (input, fallback) => {
+    const items = Array.isArray(input) ? input : fallback;
+    return [...new Map(items.map(item => String(item || '').trim()).filter(Boolean).map(item => [item.toLowerCase(), item])).values()];
+  };
+  const assetCategories = list(source.assetCategories, DEFAULT_DROPDOWN_OPTIONS.assetCategories);
+  const rawModels = source.assetModels && typeof source.assetModels === 'object' ? source.assetModels : DEFAULT_DROPDOWN_OPTIONS.assetModels;
+  const assetModels = Object.fromEntries(assetCategories.map(category => [category, list(rawModels[category], [])]));
+  return {
+    assetCategories, assetModels,
+    deskCategories: ['Monitor', 'Docking Station'],
+    consumableCategories: list(source.consumableCategories, DEFAULT_DROPDOWN_OPTIONS.consumableCategories),
+    consumableUnits: list(source.consumableUnits, DEFAULT_DROPDOWN_OPTIONS.consumableUnits)
+  };
+}
+function validateDropdownOptions(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { error: 'Dropdown data must be an object.' };
+  const fields = ['assetCategories', 'consumableCategories', 'consumableUnits'];
+  for (const field of fields) {
+    if (!Array.isArray(input[field]) || input[field].length > 100) return { error: `Provide up to 100 ${field.replace(/[A-Z]/g, x => ` ${x.toLowerCase()}`)}.` };
+    if (input[field].some(x => typeof x !== 'string' || !x.trim() || x.trim().length > 60)) return { error: `Each ${field} entry must be 1–60 characters.` };
+  }
+  if (!input.assetModels || typeof input.assetModels !== 'object' || Array.isArray(input.assetModels)) return { error: 'Asset models must be grouped by category.' };
+  for (const category of input.assetCategories) {
+    const models = input.assetModels[category];
+    if (!Array.isArray(models) || models.length > 200 || models.some(x => typeof x !== 'string' || !x.trim() || x.trim().length > 100)) return { error: `Provide up to 200 valid models for ${category}.` };
+  }
+  const value = normalizeDropdownOptions(input);
+  if (!value.assetCategories.includes('Monitor') || !value.assetCategories.includes('Docking Station')) return { error: 'Monitor and Docking Station categories are required for Desk Setup.' };
+  for (const field of fields) if (!value[field].length) return { error: `${field} must have at least one option.` };
+  return { value };
+}
 
 const DEFAULT_CONSUMABLES = [
   { id: 1, name: 'USB-C to HDMI Adapter', category: 'Adapters', quantity: 24, reorderThreshold: 10, unit: 'pcs', location: 'IT Store Room A', notes: '', updatedAt: new Date().toISOString() },
@@ -87,7 +122,7 @@ function bootstrapUsers() {
 }
 
 function removeLegacyDemoAccounts(state) {
-  // Existing local/Supabase snapshots may predate unique first-run setup. Only
+  // Older snapshots may predate unique first-run setup. Only
   // remove accounts whose stored hash still matches a publicly disclosed seed
   // password; users who already changed their password are left untouched.
   const exposedPasswords = { admin: 'Admin@2026', entry: 'entry123', viewer: 'viewer123' };
@@ -110,7 +145,6 @@ let db = null;
 let writeQueue = Promise.resolve();
 let latestWrite = Promise.resolve();
 let pendingWrites = 0;
-let relationalStorage = false;
 
 function seed() {
   const initialUsers = bootstrapUsers();
@@ -132,6 +166,8 @@ function seed() {
     deletedRecords: [],
     users: initialUsers,
     logs: [{ timestamp: new Date().toLocaleString(), user: 'System', action: 'Enterprise cluster telemetry initialized.' }],
+    signInEvents: [],
+    dropdownOptions: JSON.parse(JSON.stringify(DEFAULT_DROPDOWN_OPTIONS)),
     employeeComments: {},
     consumables: DEFAULT_CONSUMABLES.map(c => ({ ...c })),
     deskPeripherals: [],
@@ -168,6 +204,7 @@ function expandLegacyDeskRow(raw) {
 function normalizeState(state) {
   // Migrate older data files/documents that predate later app features.
   if (!state.employeeComments || typeof state.employeeComments !== 'object') state.employeeComments = {};
+  state.dropdownOptions = normalizeDropdownOptions(state.dropdownOptions);
   if (!Array.isArray(state.consumables)) state.consumables = [];
   if (!Array.isArray(state.deskPeripherals)) state.deskPeripherals = [];
   // Migrate desk rows to the per-item shape and drop any that are incomplete.
@@ -197,6 +234,8 @@ function normalizeState(state) {
   // loading a local snapshot or importing an older backup.
   delete state.audits;
   if (!Array.isArray(state.logs)) state.logs = [];
+  if (!Array.isArray(state.signInEvents)) state.signInEvents = state.logs.filter(row => isSignInEvent(row?.action));
+  state.signInEvents = state.signInEvents.filter(row => row && isSignInEvent(row.action)).slice(0, MAX_SIGN_IN_EVENTS);
   if (!Number.isSafeInteger(state.changeSequence) || state.changeSequence < 0) state.changeSequence = state.logs.length;
   if (!Array.isArray(state.users)) state.users = [];
   removeLegacyDemoAccounts(state);
@@ -301,80 +340,13 @@ function loadLocalState() {
   return normalizeState(localState);
 }
 
-async function supabaseRequest(method, resource, payload) {
-  let response;
-  try {
-    response = await fetch(`${supabaseUrl}/rest/v1/${resource}`, {
-      method,
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=representation'
-      },
-      ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
-      signal: AbortSignal.timeout(15000)
-    });
-  } catch (error) {
-    throw new Error(`Could not reach Supabase (${error.message}).`);
-  }
-  const bodyText = await response.text();
-  let body = null;
-  try { body = bodyText ? JSON.parse(bodyText) : null; } catch { body = bodyText; }
-  if (!response.ok) {
-    const detail = typeof body === 'object' && body ? (body.message || body.hint || body.details || body.code) : body;
-    const schemaHint = response.status === 404 || (body && body.code === 'PGRST205')
-      ? ` Run server/supabase/schema.sql in the Supabase SQL Editor and retry.`
-      : '';
-    throw new Error(`Supabase request failed (${response.status})${detail ? `: ${detail}` : ''}.${schemaHint}`);
-  }
-  return body;
-}
-
-async function tryRelationalLoad() {
-  try {
-    const state = await supabaseRequest('POST', 'rpc/assetflow_load_state', {});
-    if (!state || typeof state !== 'object' || Array.isArray(state)) throw new Error('The relational Supabase state response is invalid.');
-    relationalStorage = true;
-    return state;
-  } catch (error) {
-    // Existing installs may run the API before applying the relational schema
-    // migration. Keep them on the Supabase JSONB store until that migration is installed.
-    if (/\b404\b|PGRST202/i.test(error.message)) return null;
-    throw error;
-  }
-}
-
 async function init() {
   if (db) return db;
-  if (storageMode !== 'supabase') throw new Error('AssetFlow now requires Supabase storage. Set ASSETFLOW_STORAGE=supabase in .env.local.');
-
-  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase storage is selected but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing. Set both in .env.local.');
-  db = null;
-  const relationalState = await tryRelationalLoad();
-  if (relationalState) {
-    db = normalizeState(relationalState);
-    console.log(`Loaded normalized Supabase database (${db.assets.length} assets, ${db.users.length} users).`);
-    return db;
-  }
-
-  console.warn('[storage] Relational Supabase schema is not installed yet; using the existing Supabase JSONB state until migration is applied.');
-  {
-    const rows = await supabaseRequest('GET', `${SUPABASE_TABLE}?id=eq.main&select=data`);
-    if (Array.isArray(rows) && rows.length > 0) {
-      if (!rows[0].data || typeof rows[0].data !== 'object') throw new Error('The Supabase AssetFlow state row is empty or invalid.');
-      db = normalizeState(rows[0].data);
-      console.log(`Loaded shared Supabase database (${db.assets.length} assets, ${db.users.length} users).`);
-      return db;
-    }
-
-    // Never overwrite a populated remote row. When the table is empty, import
-    // the existing local file (or seed a clean install) exactly once.
-    db = loadLocalState();
-    await persist();
-    console.log(`Initialized Supabase from local data (${db.assets.length} assets, ${db.users.length} users).`);
-    return db;
-  }
+  const exists = fs.existsSync(DATA_FILE);
+  db = exists ? loadLocalState() : seed();
+  if (!exists) await persist();
+  console.log(`${exists ? 'Loaded' : 'Initialized'} local database (${db.assets.length} assets, ${db.users.length} users) at server/data.json.`);
+  return db;
 }
 
 function load() {
@@ -389,19 +361,18 @@ function persist() {
   const snapshot = JSON.parse(JSON.stringify(db));
   pendingWrites++;
   const operation = writeQueue.catch(() => {}).then(async () => {
-    if (relationalStorage) {
-      await supabaseRequest('POST', 'rpc/assetflow_save_state', { p_state: snapshot, p_local_archive: null });
-    } else {
-      await supabaseRequest('POST', `${SUPABASE_TABLE}?on_conflict=id`, {
-        id: 'main',
-        data: snapshot,
-        updated_at: new Date().toISOString()
-      });
+    const temporaryFile = `${DATA_FILE}.tmp`;
+    try {
+      await fs.promises.writeFile(temporaryFile, `${JSON.stringify(snapshot, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+      await fs.promises.rename(temporaryFile, DATA_FILE);
+    } catch (error) {
+      try { await fs.promises.unlink(temporaryFile); } catch (_) { /* no temporary file to clean up */ }
+      throw error;
     }
   });
   writeQueue = operation.then(
     () => { pendingWrites--; },
-    error => { pendingWrites--; console.error('Supabase write failed:', error.message); }
+    error => { pendingWrites--; console.error('Local database write failed:', error.message); }
   );
   latestWrite = operation;
   // Attach a handler immediately because existing routes intentionally invoke
@@ -421,8 +392,14 @@ function nextId() {
 function addLog(user, action) {
   // Store one unambiguous timestamp format; the UI formats it for each user's locale.
   db.changeSequence = (Number(db.changeSequence) || 0) + 1;
-  db.logs.unshift({ timestamp: new Date().toISOString(), user: user || 'System', action });
+  const entry = { timestamp: new Date().toISOString(), user: user || 'System', action };
+  db.logs.unshift(entry);
   if (db.logs.length > 200) db.logs.length = 200;
+  if (isSignInEvent(action)) {
+    if (!Array.isArray(db.signInEvents)) db.signInEvents = [];
+    db.signInEvents.unshift(entry);
+    if (db.signInEvents.length > MAX_SIGN_IN_EVENTS) db.signInEvents.length = MAX_SIGN_IN_EVENTS;
+  }
 }
 
 /**
@@ -459,6 +436,8 @@ function upsertEmployee(name, department = '') {
 module.exports = {
   init, load, persist, flush, hasPendingWrites, nextId, addLog, pushHistory, upsertEmployee,
   expandLegacyDeskRow,
+  normalizeDropdownOptions, validateDropdownOptions, DEFAULT_DROPDOWN_OPTIONS,
+  get dropdownOptions() { return load().dropdownOptions; },
   CATALOG, CATEGORIES, DEPARTMENTS, STATUSES, STOCK_LABEL,
   CONSUMABLE_CATEGORIES, CONSUMABLE_UNITS,
   get db() { return load(); }

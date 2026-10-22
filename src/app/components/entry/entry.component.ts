@@ -26,11 +26,11 @@ export class EntryComponent implements OnDestroy {
   pageInfo = pageInfo;
   Infinity = Infinity;
 
-  categoryOptions: SelectOption[] = [];
+  categoryOptions = computed<SelectOption[]>(() => this.data.categories().map(c => ({ value: c, label: c })));
   statusOptions: SelectOption[] = [];
   assignmentTypeOptions: SelectOption[] = [{ value: 'Primary', label: 'Primary' }, { value: 'Temporary', label: 'Temporary' }];
   bulkOptions: SelectOption[] = [];
-  catFilterOptions: SelectOption[] = [];
+  catFilterOptions = computed<SelectOption[]>(() => [{ value: 'All', label: 'All Categories' }, ...this.data.categories().map(c => ({ value: c, label: c }))]);
   deptFilterOptions: SelectOption[] = [];
   sizeOptions: SelectOption[] = [{ value: '10', label: '10' }, { value: '20', label: '20' }, { value: '50', label: '50' }, { value: '100', label: '100' }];
 
@@ -44,7 +44,7 @@ export class EntryComponent implements OnDestroy {
   fAssignedTo = signal('');
   fComment = signal('');
 
-  modelOptions = computed<SelectOption[]>(() => (this.data.catalog[this.fCategory()] || []).map(m => ({ value: m, label: m })));
+  modelOptions = computed<SelectOption[]>(() => (this.data.catalog()[this.fCategory()] || []).map(m => ({ value: m, label: m })));
   assignableEmployees = computed<string[]>(() => [...this.data.employeeRoster().map(employee => employee.name), 'Stock']);
 
   // confirm modal
@@ -102,7 +102,7 @@ export class EntryComponent implements OnDestroy {
   eAssignedTo = signal('');
   ePurchaseDate = '';
   eWarrantyDate = '';
-  editModelOptions = computed<SelectOption[]>(() => (this.data.catalog[this.eCategory()] || []).map(m => ({ value: m, label: m })));
+  editModelOptions = computed<SelectOption[]>(() => (this.data.catalog()[this.eCategory()] || []).map(m => ({ value: m, label: m })));
 
   // history modal — tracks the asset by id so the timeline stays live across reloads
   historyOpen = signal(false);
@@ -173,10 +173,8 @@ export class EntryComponent implements OnDestroy {
   constructor(public data: DataService, public auth: AuthService, private ui: UiService) {
     void this.data.loadDellCases();
     void this.data.loadEmployees();
-    this.categoryOptions = this.data.categories.map(c => ({ value: c, label: c }));
     this.statusOptions = this.data.statuses.map(s => ({ value: s, label: s }));
     this.bulkOptions = [{ value: '', label: 'Update Status...' }, ...this.data.statuses.map(s => ({ value: s, label: s }))];
-    this.catFilterOptions = [{ value: 'All', label: 'All Categories' }, ...this.data.categories.map(c => ({ value: c, label: c }))];
     this.deptFilterOptions = [{ value: 'All', label: 'All Departments' }, ...[...this.data.departments, 'Stock'].map(d => ({ value: d, label: d }))];
     // initialize model to first of category
     const first = this.modelOptions()[0];

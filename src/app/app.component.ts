@@ -158,8 +158,8 @@ export class AppComponent {
   ];
   readonly guideSupportPaths = [
     { problem: 'A screen or action is missing', next: 'Ask an administrator to check role and user-specific permissions.' },
-    { problem: 'Data looks missing or outdated', next: 'Refresh, verify search/filters, and confirm you are using the intended local or hosted environment.' },
-    { problem: 'Sign-in or API error', next: 'Check the company email and password; if the request still fails, confirm the hosted API is healthy and review the hosting logs.' },
+    { problem: 'Data looks missing or outdated', next: 'Refresh and verify your search/filters, then check that you are using the right local data file.' },
+    { problem: 'Sign-in or API error', next: 'Check the company email and password, then confirm the local API is running at http://localhost:3000/api/health.' },
     { problem: 'Asset or employee data is incorrect', next: 'Correct it in the module that owns the record, then review the Activity Trail.' },
     { problem: 'Need help with a task', next: 'Search this guide for the tab or task, then follow its example and steps.' }
   ];
@@ -273,7 +273,7 @@ export class AppComponent {
     return { title: guide?.title || this.pageTitle, description: guide?.description || '', steps };
   }
   private readonly defaultSidebarOrder = ['dashboard', 'assets', 'links', 'employees', 'manage-employees', 'former-employees', 'dell-cases', 'returns', 'warranty', 'logs', 'users'];
-  private readonly defaultAssetChildOrder = ['entry', 'desk-setup', 'consumables'];
+  private readonly defaultAssetChildOrder = ['entry', 'desk-setup', 'consumables', 'dropdowns'];
   readonly sidebarItems: SidebarItem[] = [
     { id: 'dashboard', label: 'Dashboard', route: '/dashboard', icon: 'fa-chart-pie', iconColor: '' },
     { id: 'assets', label: 'Assets', route: '/dashboard', icon: 'fa-boxes-stacked', iconColor: 'text-indigo-400', writeOnly: true },
@@ -290,7 +290,8 @@ export class AppComponent {
   readonly assetChildItems: SidebarItem[] = [
     { id: 'entry', label: 'Asset Entry', route: '/entry', icon: 'fa-circle-plus', iconColor: 'text-indigo-400', writeOnly: true },
     { id: 'desk-setup', label: 'Desk Setup', route: '/desk-setup', icon: 'fa-desktop', iconColor: 'text-cyan-400', writeOnly: true },
-    { id: 'consumables', label: 'Consumables', route: '/consumables', icon: 'fa-boxes-stacked', iconColor: 'text-emerald-400', adminOnly: true }
+    { id: 'consumables', label: 'Consumables', route: '/consumables', icon: 'fa-boxes-stacked', iconColor: 'text-emerald-400', adminOnly: true },
+    { id: 'dropdowns', label: 'Dropdown Data', route: '/dropdowns', icon: 'fa-list-check', iconColor: 'text-violet-400' }
   ];
   sidebarEditMode = false;
   private sidebarOrder = [...this.defaultSidebarOrder];
@@ -306,6 +307,7 @@ export class AppComponent {
     const pages = [
       { label: 'Dashboard', detail: 'Fleet overview', icon: 'fa-chart-pie', route: '/dashboard', admin: false },
       { label: 'Asset entry', detail: 'Add or import equipment', icon: 'fa-circle-plus', route: '/entry', admin: false, write: true },
+      { label: 'Dropdown data', detail: 'View and manage asset and consumable options', icon: 'fa-list-check', route: '/dropdowns', admin: false },
       { label: 'Desk setup', detail: 'Manage monitors and docking stations by desk', icon: 'fa-desktop', route: '/desk-setup', admin: false, write: true },
       { label: 'Shared links', detail: 'Open shared company websites and resources', icon: 'fa-link', route: '/links', admin: false },
       { label: 'Employees', detail: 'Assignments and people', icon: 'fa-users', route: '/employees', admin: false },
@@ -344,6 +346,7 @@ export class AppComponent {
   private canOpenCommandPage(route: string): boolean {
     if (route === '/dashboard') return this.auth.can('dashboard.view');
     if (route === '/entry') return this.auth.can('assets.view');
+    if (route === '/dropdowns') return this.auth.can('dropdowns.view');
     if (route === '/desk-setup') return this.auth.can('deskSetup.view');
     if (route === '/links') return this.auth.can('links.view');
     if (route === '/employees') return this.auth.canAny('employees.view', 'employeeDirectory.view');
@@ -377,6 +380,7 @@ export class AppComponent {
 
   sidebarOpen = false;
   sidebarCollapsed = false;
+  sidebarTooltip = signal<{ label: string; top: number; left: number } | null>(null);
   assetsMenuOpen = true;
   profileOpen = false;
   profileMenuOpen = false;
@@ -460,11 +464,11 @@ export class AppComponent {
   visibleSidebarItems(): SidebarItem[] {
     const permissionByItem: Record<string, string> = { dashboard: 'dashboard.view', links: 'links.view', employees: 'employees.view', 'manage-employees': 'employeeDirectory.view', 'former-employees': 'formerEmployees.view', 'dell-cases': 'dellCases.view', returns: 'offboarding.view', warranty: 'warranty.view', logs: 'activity.view', users: 'users.manage' };
     return this.sidebarItems.filter(item => item.id === 'assets'
-      ? this.auth.can('assets.view') || this.auth.can('deskSetup.view') || this.auth.can('consumables.view')
+      ? this.auth.can('assets.view') || this.auth.can('deskSetup.view') || this.auth.can('consumables.view') || this.auth.can('dropdowns.view')
       : this.auth.can(permissionByItem[item.id] || 'dashboard.view'));
   }
   visibleAssetChildren(): SidebarItem[] {
-    const permissionByItem: Record<string, string> = { entry: 'assets.view', 'desk-setup': 'deskSetup.view', consumables: 'consumables.view' };
+    const permissionByItem: Record<string, string> = { entry: 'assets.view', 'desk-setup': 'deskSetup.view', consumables: 'consumables.view', dropdowns: 'dropdowns.view' };
     return this.assetChildItems.filter(item => this.auth.can(permissionByItem[item.id]));
   }
   orderedSidebarItems(): SidebarItem[] {
@@ -483,9 +487,16 @@ export class AppComponent {
   }
   toggleSidebarCollapsed() {
     this.sidebarCollapsed = !this.sidebarCollapsed;
+    this.sidebarTooltip.set(null);
     try { localStorage.setItem(this.sidebarCollapsedPreferenceKey(), String(this.sidebarCollapsed)); }
     catch { this.ui.error('Could not save your sidebar preference in this browser.'); }
   }
+  showSidebarTooltip(event: MouseEvent | FocusEvent, label: string) {
+    if (!this.sidebarCollapsed || !window.matchMedia('(min-width: 768px)').matches) return;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.sidebarTooltip.set({ label, top: rect.top + rect.height / 2, left: rect.right + 10 });
+  }
+  hideSidebarTooltip() { this.sidebarTooltip.set(null); }
   private loadSidebarOrder() {
     this.sidebarOrder = [...this.defaultSidebarOrder];
     this.assetChildOrder = [...this.defaultAssetChildOrder];
@@ -550,6 +561,7 @@ export class AppComponent {
     const titles: Record<string, string> = {
       '/dashboard': 'Hardware Fleet Overview',
       '/entry': 'Dedicated Asset Entry Portal',
+      '/dropdowns': 'Manage Dropdown Data',
       '/employees': 'Employee Equipment Assignments',
       '/manage-employees': 'Manage Employee Roster',
       '/returns': 'Employee Equipment Offboarding',
@@ -619,7 +631,7 @@ export class AppComponent {
   toggleTheme() { this.theme.toggle(); }
   toggleSidebar() { this.sidebarOpen = !this.sidebarOpen; }
   toggleAssetsMenu() { this.assetsMenuOpen = !this.assetsMenuOpen; }
-  isAssetsRouteActive() { return ['/entry', '/desk-setup', '/consumables'].some(path => this.router.url.split('?')[0].startsWith(path)); }
+  isAssetsRouteActive() { return ['/entry', '/desk-setup', '/consumables', '/dropdowns'].some(path => this.router.url.split('?')[0].startsWith(path)); }
 
   openCommandBar() {
     if (!this.auth.isLoggedIn()) return;

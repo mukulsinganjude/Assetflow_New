@@ -40,7 +40,8 @@ export const sectionGuard: CanActivateFn = (route) => {
   const segment = route.routeConfig?.path || '';
   const permission = segment === 'dashboard' ? 'dashboard.view'
     : segment === 'entry' ? 'assets.view'
-      : segment === 'desk-setup' ? 'deskSetup.view'
+      : segment === 'dropdowns' ? 'dropdowns.view'
+        : segment === 'desk-setup' ? 'deskSetup.view'
         : segment === 'links' ? 'links.view'
           : segment.startsWith('employees') ? 'employees.view'
             : segment === 'manage-employees' ? 'employeeDirectory.view'

@@ -19,7 +19,7 @@ import { EmojiPickerComponent } from './emoji-picker.component';
           <button type="button" (click)="closed.emit()" class="text-slate-400 hover:text-rose-400" aria-label="Close Dell case details"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
-        <div *ngIf="isNewCase() && !editingCase()" class="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-circle-exclamation mr-2"></i>Please raise the Dell case for this asset.</div>
+        <div *ngIf="isNewCase() && !editingCase()" class="mb-4 flex flex-col gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between"><span><i class="fa-solid fa-circle-exclamation mr-2"></i>Please raise the Dell case for this asset.</span><a href="https://www.dell.com/support/incidents-online/en-in/srsearch" target="_blank" rel="noopener noreferrer" class="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-amber-400/40 px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-500/10 dark:text-amber-200 sm:self-auto"><i class="fa-solid fa-arrow-up-right-from-square"></i>Open Dell Service Request</a></div>
         <div *ngIf="!editingCase()" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
           <div><span class="block text-[10px] font-bold uppercase text-slate-500">Employee</span><span class="font-semibold">{{ row.employeeName }}</span></div>
           <div><span class="block text-[10px] font-bold uppercase text-slate-500">Status</span><span class="inline-block mt-1 px-2.5 py-1 rounded-lg text-xs font-bold" [ngClass]="statusClass(row.status)">{{ row.status }}</span></div>
@@ -109,7 +109,7 @@ export class DellCasePopupComponent {
   isNewCase() { return this._newCaseAsset() != null; }
   canModify(c: CommentEntry) { return this.canWrite && (this.auth.isAdmin() || c.user === this.auth.currentUser()?.username); }
   categoryForModel(model: string): string {
-    for (const [category, models] of Object.entries(this.data.catalog)) if (models.includes(model)) return category;
+    for (const [category, models] of Object.entries(this.data.catalog())) if (models.includes(model)) return category;
     return this.data.assets().find(asset => asset.name === model)?.category || '';
   }
   date(value: string) { return value ? new Date(`${value}T00:00:00`).toLocaleDateString() : '—'; }

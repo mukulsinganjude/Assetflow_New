@@ -60,9 +60,10 @@ function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-console.log('[dev] Starting API (http://localhost:3000) and Angular (http://localhost:4200)...\n');
+console.log('[dev] Starting API (http://localhost:3000) and Angular (http://0.0.0.0:4200)...');
+console.log('[dev] On another device on the same private network, open http://<this-computer-ip>:4200\n');
 
 // Backend: server/package.json "start" -> node server.js
 run('api', 'npm', ['start'], serverDir);
 // Frontend: root "start" -> ng serve (proxies /api to :3000)
-run('web', 'npm', ['start'], root);
+run('web', 'npm', ['start', '--', '--host', '0.0.0.0'], root);

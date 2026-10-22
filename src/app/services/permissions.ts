@@ -10,6 +10,7 @@ export const PERMISSION_SECTIONS: PermissionSection[] = [
   { key: 'employees', title: 'Employees', actions: [{ key: 'view', label: 'View' }, { key: 'comment', label: 'Add / edit comments' }] },
   { key: 'deskSetup', title: 'Desk Setup', actions: [{ key: 'view', label: 'View' }, { key: 'add', label: 'Add' }, { key: 'edit', label: 'Edit' }, { key: 'delete', label: 'Delete' }, { key: 'import', label: 'Import' }, { key: 'export', label: 'Export' }] },
   { key: 'consumables', title: 'Consumables', actions: [{ key: 'view', label: 'View' }, { key: 'add', label: 'Add' }, { key: 'edit', label: 'Edit' }, { key: 'adjust', label: 'Adjust stock' }, { key: 'delete', label: 'Delete' }, { key: 'import', label: 'Import' }, { key: 'export', label: 'Export' }] },
+  { key: 'dropdowns', title: 'Dropdown Data', actions: [{ key: 'view', label: 'View' }, { key: 'manage', label: 'Manage' }] },
   { key: 'offboarding', title: 'Offboarding Returns', actions: [{ key: 'view', label: 'View' }, { key: 'start', label: 'Start checklist' }, { key: 'return', label: 'Record returns' }] },
   { key: 'formerEmployees', title: 'Former Employees', actions: [{ key: 'view', label: 'View' }, { key: 'archive', label: 'Archive employee' }, { key: 'export', label: 'Export' }] },
   { key: 'dellCases', title: 'Dell Cases', actions: [{ key: 'view', label: 'View' }, { key: 'add', label: 'Create' }, { key: 'edit', label: 'Edit' }, { key: 'delete', label: 'Delete' }, { key: 'comment', label: 'Comments' }, { key: 'import', label: 'Import' }, { key: 'export', label: 'Export' }] },
