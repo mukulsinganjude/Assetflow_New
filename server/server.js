@@ -431,6 +431,28 @@ app.get('/api/assets', (req, res) => res.json(store.db.assets.map(publicAsset)))
 
 const canWrite = requireRole('admin', 'entry');
 
+ // Enforce two active laptops per employee. Request handlers validate and mutate
+ // synchronously, so requests handled by this Node process cannot interleave.
+ const activeLaptopCountForEmployee = (employeeName, excludedIds = new Set(), extraAssets = []) => {
+   if (isStock(employeeName)) return 0;
+   const employee = String(employeeName || '').trim().toLowerCase();
+   return [...new Set([...store.db.assets, ...extraAssets])].filter(asset =>
+     !excludedIds.has(asset.id) &&
+     String(asset.category || '').trim().toLowerCase() === 'laptop' &&
+     String(asset.assignedTo || '').trim().toLowerCase() === employee &&
+     String(asset.status || '').trim().toLowerCase() === 'in use'
+   ).length;
+ };
+ const laptopLimitError = (assignedTo, category, status, excludedIds = new Set(), extraAssets = []) => {
+   if (String(category || '').trim().toLowerCase() !== 'laptop' ||
+       String(status || '').trim().toLowerCase() !== 'in use' || isStock(assignedTo)) return null;
+   if (activeLaptopCountForEmployee(assignedTo, excludedIds, extraAssets) >= 2) {
+     return `${assignedTo} already has two active laptops. Return or unassign a laptop before assigning another.`;
+   }
+   return null;
+ };
+
+
 app.post('/api/assets', canWrite, (req, res) => {
   const v = validateAsset(req.body, { requireDates: false });
   if (!v.ok) return res.status(400).json({ error: v.error });
@@ -438,6 +460,8 @@ app.post('/api/assets', canWrite, (req, res) => {
   if (!resolvedAssignee) return res.status(400).json({ error: unknownAssigneeError(v.value.assignedTo) });
   v.value.assignedTo = resolvedAssignee;
   v.value.department = departmentForAssignee(resolvedAssignee);
+  const laptopLimit = laptopLimitError(v.value.assignedTo, v.value.category, v.value.status);
+  if (laptopLimit) return res.status(409).json({ code: 'LAPTOP_ASSIGNMENT_LIMIT', error: laptopLimit });
   if (store.db.assets.some(a => a.serial.toLowerCase() === v.value.serial.toLowerCase())) {
     return res.status(409).json({ error: `An asset with serial "${v.value.serial}" already exists.` });
   }
@@ -490,6 +514,8 @@ app.put('/api/assets/:id', canWrite, (req, res) => {
   if (!resolvedAssignee) return res.status(400).json({ error: unknownAssigneeError(v.value.assignedTo) });
   v.value.assignedTo = resolvedAssignee;
   v.value.department = departmentForAssignee(resolvedAssignee);
+  const laptopLimit = laptopLimitError(v.value.assignedTo, v.value.category, v.value.status, new Set([id]));
+  if (laptopLimit) return res.status(409).json({ code: 'LAPTOP_ASSIGNMENT_LIMIT', error: laptopLimit });
   if (store.db.assets.some(a => a.id !== id && a.serial.toLowerCase() === v.value.serial.toLowerCase())) {
     return res.status(409).json({ error: `Another asset already uses serial "${v.value.serial}".` });
   }
@@ -543,6 +569,8 @@ app.post('/api/recovery-archive/:id/restore', requireRole('admin'), (req, res) =
     if ((store.db.assets || []).some(asset => String(asset.serial || '').trim().toLowerCase() === String(record.serial || '').trim().toLowerCase())) {
       return res.status(409).json({ error: `Cannot restore: serial ${record.serial} is already in active inventory.` });
     }
+    const laptopLimit = laptopLimitError(record.assignedTo, record.category, record.status);
+    if (laptopLimit) return res.status(409).json({ code: 'LAPTOP_ASSIGNMENT_LIMIT', error: `Cannot restore asset. ${laptopLimit}` });
     store.db.assets.push(record);
   } else if (archived.type === 'employee') {
     const record = archived.record;
@@ -610,6 +638,8 @@ app.post('/api/assets/:id/assign', canWrite, (req, res) => {
   if (assignedTo === prevAssignee && status === prevStatus && department === prevDepartment && assignmentType === prevAssignmentType) {
     return res.status(400).json({ error: 'No change — the asset already has that assignee and status.' });
   }
+  const laptopLimit = laptopLimitError(assignedTo, asset.category, status, new Set([id]));
+  if (laptopLimit) return res.status(409).json({ code: 'LAPTOP_ASSIGNMENT_LIMIT', error: laptopLimit });
   const isCheckIn = isStock(assignedTo);
   if (assignmentType === 'Primary') demoteOtherPrimaryAssets(assignedTo, asset.category, new Set([id]), req.user.username);
   asset.assignedTo = assignedTo;
@@ -929,6 +959,14 @@ app.post('/api/assets/bulk-assign', canWrite, (req, res) => {
   if (status && ((status === 'In Use' && isStock(assignedTo)) || (status === 'In Storage' && !isStock(assignedTo)))) {
     return res.status(400).json({ error: `Status ${status} does not match the selected assignee. Choose an employee for In Use or Stock for In Storage.` });
   }
+  const selectedLaptopIds = new Set(store.db.assets.filter(a => ids.has(a.id) && String(a.category || '').trim().toLowerCase() === 'laptop').map(a => a.id));
+  if (!isStock(assignedTo) && (!status || status === 'In Use')) {
+    const selectedLaptopCount = store.db.assets.filter(a => selectedLaptopIds.has(a.id) && (status || a.status) === 'In Use').length;
+    const existingCount = activeLaptopCountForEmployee(assignedTo, ids);
+    if (existingCount + selectedLaptopCount > 2) {
+      return res.status(409).json({ code: 'LAPTOP_ASSIGNMENT_LIMIT', error: `${assignedTo} already has two active laptops or this bulk assignment would exceed the two-laptop limit. Select fewer laptops or return/unassign one first.` });
+    }
+  }
   const selectedByCategory = new Map();
   if (assignmentType === 'Primary' && !isStock(assignedTo)) {
     store.db.assets.filter(a => ids.has(a.id)).forEach(asset => {
@@ -1134,6 +1172,8 @@ app.post('/api/assets/import', canWrite, (req, res) => {
     if (!resolvedAssignee) { errors.push(`Row ${i + 1}: ${unknownAssigneeError(v.value.assignedTo)}`); return; }
     v.value.assignedTo = resolvedAssignee;
     v.value.department = departmentForAssignee(resolvedAssignee);
+    const laptopLimit = laptopLimitError(v.value.assignedTo, v.value.category, v.value.status, new Set(), added);
+    if (laptopLimit) { errors.push(`Row ${i + 1}: ${laptopLimit}`); return; }
     const dup = store.db.assets.some(a => a.serial.toLowerCase() === v.value.serial.toLowerCase())
       || added.some(a => a.serial.toLowerCase() === v.value.serial.toLowerCase());
     if (dup) { errors.push(`Row ${i + 1}: duplicate serial "${v.value.serial}"`); return; }
