@@ -18,10 +18,27 @@ const isLocalDevelopmentOrigin = origin => {
       /^172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}$/.test(host);
   } catch { return false; }
 };
-app.use(cors({ origin(origin, callback) {
-  if (!origin || isLocalDevelopmentOrigin(origin)) return callback(null, true);
-  return callback(new Error('This website origin is not allowed to access the AssetFlow API.'));
-} }));
+app.use(cors({
+  origin(origin, callback) {
+    const allowedOrigins = [
+      'https://assetflow-new-1.onrender.com'
+    ];
+
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      isLocalDevelopmentOrigin(origin)
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(
+      new Error('This website origin is not allowed to access the AssetFlow API.')
+    );
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '2mb' }));
 
 // express.json only populates req.body for JSON requests; guarantee an object so
