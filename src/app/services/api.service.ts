@@ -9,7 +9,7 @@ import { Observable } from 'rxjs';
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
-  private base = '/api';
+  private base = '/https://assetflow-new-111.onrender.com';
 
   get<T>(path: string): Observable<T> {
     return this.http.get<T>(this.base + path);
